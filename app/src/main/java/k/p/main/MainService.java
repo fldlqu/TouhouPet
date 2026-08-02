@@ -107,6 +107,7 @@ public class MainService extends Service {
 
     private void initLog() {
         LogUtil.recordPath = String.valueOf(EnvironmentUtil.getMainPath()) + "/system/log/exception.thp";
+        LogUtil.clearExceptionListeners(); /* 防重复注册:static 列表跨多次 Service 启动累积 */
         LogUtil.registerExceptionListener(new LogUtil.ExceptionListener() { // from class: k.p.main.MainService.2
             @Override // local.kcn.utils.LogUtil.ExceptionListener
             public void occurException(Exception e) {
@@ -284,7 +285,13 @@ public class MainService extends Service {
         this.windowManager.removeView(BarrageService.barrageView);
     }
 
+    private boolean exited = false;
+
     public void exit() {
+        if (this.exited) {
+            return; /* 幂等:异常链可能多次触发 exit */
+        }
+        this.exited = true;
         SongService.exit();
         this.updateLoop = false;
         if (this.updateThread != null) {
@@ -307,6 +314,10 @@ public class MainService extends Service {
     }
 
     public void exitWithoutSave() {
+        if (this.exited) {
+            return; /* 幂等 */
+        }
+        this.exited = true;
         this.updateLoop = false;
         try {
             this.updateThread.join(2000L);

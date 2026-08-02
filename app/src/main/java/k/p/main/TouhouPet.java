@@ -1,12 +1,15 @@
 package k.p.main;
 
+import android.Manifest;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.DialogInterface;
 import android.content.Intent;
+import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.os.Environment;
 import android.provider.Settings;
 import android.util.Log;
 import java.io.File;
@@ -21,13 +24,15 @@ import k.p.utils.EnvironmentUtil;
 import k.p.utils.SaveLoadUtil;
 import local.kcn.utils.LogUtil;
 
-/* 现代化:悬浮窗权限引导(SYSTEM_ALERT_WINDOW 需用户到系统设置开启)、
- * 旧版 SD 卡数据自动迁移、Android 13+ 通知权限。宠物逻辑保持原版。 */
+/* 数据目录 = 公共 SD 卡 /sdcard/TouhouPet(与原版一致)。
+ * 权限引导:Android 11+ 需"所有文件访问";Android 10 及以下需 WRITE_EXTERNAL_STORAGE。 */
 public class TouhouPet extends Activity {
     private static final int REQUEST_NOTIFICATION = 1;
+    private static final int REQUEST_STORAGE = 2;
     private MainView mainView;
     private boolean initialized = false;
     private boolean overlayDialogShown = false;
+    private boolean storageDialogShown = false;
 
     @Override // android.app.Activity
     public void onCreate(Bundle savedInstanceState) {
@@ -50,16 +55,69 @@ public class TouhouPet extends Activity {
         }
     }
 
-    /* 从系统设置返回后复查悬浮窗权限 */
+    /* 从系统设置/权限页返回后复查 */
     @Override // android.app.Activity
     protected void onResume() {
         super.onResume();
-        if (!initialized && Settings.canDrawOverlays(this)) {
-            initialized = true;
+        if (this.initialized) {
+            return;
+        }
+        if (Settings.canDrawOverlays(this) && hasStoragePermission()) {
+            this.initialized = true;
             proceed();
-        } else if (!initialized && !overlayDialogShown && !Settings.canDrawOverlays(this)) {
-            overlayDialogShown = true;
+        } else if (!Settings.canDrawOverlays(this) && !this.overlayDialogShown) {
+            this.overlayDialogShown = true;
             showOverlayPermissionDialog();
+        } else if (Settings.canDrawOverlays(this) && !hasStoragePermission()
+                && !this.storageDialogShown) {
+            this.storageDialogShown = true;
+            showStoragePermissionDialog();
+        }
+    }
+
+    /* Android 11+(API 30):"所有文件访问";API 26-29:WRITE_EXTERNAL_STORAGE 运行时权限 */
+    private boolean hasStoragePermission() {
+        if (Build.VERSION.SDK_INT >= 30) {
+            return Environment.isExternalStorageManager();
+        }
+        return checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+                == PackageManager.PERMISSION_GRANTED;
+    }
+
+    private void showStoragePermissionDialog() {
+        try {
+            AlertDialog.Builder builder = new AlertDialog.Builder(this);
+            builder.setTitle("需要存储权限");
+            builder.setMessage("TouhouPet 数据(存档/动画/音乐)存放在 SD 卡根目录 TouhouPet 文件夹。\n\n"
+                    + "点击\\\"去授权\\\"后在系统设置中允许\\\"所有文件访问\\\",返回后继续。");
+            builder.setPositiveButton("去授权", new DialogInterface.OnClickListener() {
+                @Override
+                public void onClick(DialogInterface dialog, int which) {
+                    if (Build.VERSION.SDK_INT >= 30) {
+                        try {
+                            Intent intent = new Intent(
+                                    Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION,
+                                    Uri.parse("package:" + TouhouPet.this.getPackageName()));
+                            TouhouPet.this.startActivity(intent);
+                        } catch (Exception e) {
+                            LogUtil.log(e);
+                        }
+                    } else {
+                        requestPermissions(
+                                new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE},
+                                REQUEST_STORAGE);
+                    }
+                }
+            });
+            builder.setNegativeButton("退出", new DialogInterface.OnClickListener() {
+                @Override
+                public void onClick(DialogInterface dialog, int which) {
+                    TouhouPet.this.finish();
+                }
+            });
+            builder.show();
+        } catch (Exception e) {
+            LogUtil.log(e);
         }
     }
 
@@ -67,8 +125,8 @@ public class TouhouPet extends Activity {
         try {
             AlertDialog.Builder builder = new AlertDialog.Builder(this);
             builder.setTitle("需要悬浮窗权限");
-            builder.setMessage("TouhouPet 需要\"显示在其他应用上层\"权限才能把宠物悬浮在桌面上。\n\n"
-                    + "点击\"去授权\"后将跳转到系统设置,开启后返回本应用即可。");
+            builder.setMessage("TouhouPet 需要\\\"显示在其他应用上层\\\"权限才能把宠物悬浮在桌面上。\n\n"
+                    + "点击\\\"去授权\\\"后将跳转到系统设置,开启后返回本应用即可。");
             builder.setPositiveButton("去授权", new DialogInterface.OnClickListener() { // from class: k.p.main.TouhouPet.2
                 @Override // android.content.DialogInterface.OnClickListener
                 public void onClick(DialogInterface dialog, int which) {
@@ -95,7 +153,6 @@ public class TouhouPet extends Activity {
 
     private void proceed() {
         try {
-            EnvironmentUtil.migrateFromLegacy(this);
             File mainFilePath = new File(EnvironmentUtil.getMainPath());
             if (!mainFilePath.exists()) {
                 try {

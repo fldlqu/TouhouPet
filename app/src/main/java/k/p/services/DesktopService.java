@@ -52,6 +52,9 @@ public class DesktopService {
     }
 
     public static void clear() {
+        if (allViewList == null) {
+            return; /* 幂等:release 后再次调用不崩溃 */
+        }
         for (BaseDesktopView view : allViewList) {
             try {
                 view.requestStop();

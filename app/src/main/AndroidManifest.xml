@@ -5,6 +5,9 @@
     <!-- 前台服务(桌面宠物常驻) -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/>
+    <!-- 旧版路径数据目录 /sdcard/TouhouPet:Android 11+ 需"所有文件访问";API 26-29 用此权限 -->
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE"/>
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29"/>
     <!-- Android 13+ 通知权限(前台服务通知) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
     <application android:hardwareAccelerated="true" android:icon="@mipmap/ic_launcher"

@@ -113,4 +113,8 @@ public class LogUtil {
     public static void registerExceptionListener(ExceptionListener listener) {
         listenerList.add(listener);
     }
+
+    public static void clearExceptionListeners() {
+        listenerList.clear();
+    }
 }
