@@ -7,11 +7,10 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Rect
-import android.os.Handler
-import android.os.Looper
 import android.os.SystemClock
 import android.util.AttributeSet
 import android.util.TypedValue
+import android.view.Choreographer
 import android.view.View
 import android.view.WindowManager
 import kotlinx.coroutines.cancel
@@ -34,7 +33,8 @@ import java.util.ArrayList
  *   surfaceCreated/surfaceDestroyed, 不可见即暂停可见即恢复
  *
  * 保持不变的业务语义:
- * - MAX_FPS 档位(跟随系统/40/60, 设定可调变) + updateInterval 节拍(Handler 帧调度)
+ * - MAX_FPS 档位(跟随系统/40/60, 设定可调变) + updateInterval 节拍(Choreographer
+ *   vsync 对齐帧调度)
  * - paused / requestPause / requestStop / startDraw 全部保留
  * - updateStatus(time) 返回 true 才真正 invalidate 重绘(与旧版"返回值决定 lockCanvas"一致)
  * - loadBitmap/releaseBitmap 资源链与 bitmapList 回收完全保留
@@ -130,13 +130,21 @@ open class BaseView : View {
     /** 异步初始化作用域(构造时启动) */
     private val asyncScope = AppScopes.newDefault()
 
-    /** 帧调度(主线程) */
-    private val frameHandler = Handler(Looper.getMainLooper())
-    private val frameRunnable = Runnable { onFrameTick() }
+    /** 帧调度: Choreographer 对齐 vsync(替代 Handler 自由节拍)。
+     * vsync 每屏幕刷新一拍, 帧是否推进由 updateInterval 换算的 elapsed 判定,
+     * 60fps 档在 60Hz 屏即每 vsync 一帧, 120Hz 屏 60fps 档隔帧推进。 */
+    private val frameChoreographer = Choreographer.getInstance()
+    private val frameCallback = object : Choreographer.FrameCallback {
+        override fun doFrame(frameTimeNanos: Long) {
+            onFrameTick()
+        }
+    }
     private var frameScheduled = false
     private var attached = false
     private var frameRequested = false
     private var stopped = false
+    /** 下一帧到期基准(累加式节拍, 见 onFrameTick) */
+    private var lastFrameDue = 0L
 
     constructor(context: Context) : this(context, null)
 
@@ -167,6 +175,7 @@ open class BaseView : View {
         currentTime = SystemClock.elapsedRealtime()
         startTime = currentTime
         lastTime = currentTime
+        lastFrameDue = currentTime
         frameScheduled = false
         if (attached && !paused) {
             startFrameLoop()
@@ -246,40 +255,56 @@ open class BaseView : View {
             return
         }
         frameScheduled = true
-        frameHandler.post(frameRunnable)
+        frameChoreographer.postFrameCallback(frameCallback)
     }
 
     private fun stopFrameLoop() {
         frameScheduled = false
-        frameHandler.removeCallbacks(frameRunnable)
+        frameChoreographer.removeFrameCallback(frameCallback)
     }
 
-    /** 一帧节拍: 时间推进 + updateStatus + 可选 invalidate(对应旧 loop 前半段) */
+    /** 一帧节拍(vsync 驱动): 时间推进 + updateStatus + 可选 invalidate(对应旧 loop 前半段) */
     private fun onFrameTick() {
-        frameScheduled = false
+        if (frameScheduled) {
+            frameScheduled = false
+        }
         if (!loop || !attached || paused) {
             return
         }
         val elapsed = SystemClock.elapsedRealtime()
-        /* 与旧 loop 一致: lastTime 为上一帧时刻, time 为帧间隔 */
-        val time = (elapsed - lastTime).toInt()
+        /* 帧间隔决策(vsync 对齐版): 累计经过时间达到 updateInterval(目标帧间隔)才推帧。
+         * lastFrameDue 采用累加式(next = last + interval), 误差不随时间累积:
+         * - 60Hz 屏 60fps: 每 vsync 一帧; 40fps: 每 2~3 vsync 推一帧(约 30fps, 因 40 与
+         *   60 不是整数比, vsync 对齐必然在 30/60 之间取;旧 Handler 25ms 自由节拍在 60Hz
+         *   屏同样是 30~40 抖动, 现状不劣)
+         * - 若绘制耗时越过 interval, updateStatus 一次只推一帧, 帧率自然下降不堆积 */
+        val intervalMs = updateInterval.coerceAtLeast(1).toLong()
+        if (elapsed - lastFrameDue < intervalMs) {
+            /* 未到下一帧: 继续对齐 vsync 等待 */
+            scheduleNext()
+            return
+        }
+        val time = (elapsed - lastFrameDue).toInt()
         lastTime = elapsed
         currentTime = elapsed
         frames++
         offset = elapsed - startTime
+        lastFrameDue += intervalMs
+        if (elapsed - lastFrameDue >= intervalMs) {
+            /* 帧亏空多于一个间隔: 重置累计基准, 避免追赶式连续推帧(会ADC)。
+             * 基准对齐到当前 el, 之后重新累计。 */
+            lastFrameDue = elapsed
+        }
         if (updateStatus(time)) {
             invalidate()
         }
-        /* 节拍控制: 到下一帧的最小等待时间 = 帧耗用后的剩余间隔 */
-        val minTime = (updateInterval - time).toInt()
-        if (frameScheduled || !loop || !attached || paused) {
-            return
-        }
-        frameScheduled = true
-        if (minTime > 0) {
-            frameHandler.postDelayed(frameRunnable, minTime.toLong())
-        } else {
-            frameHandler.post(frameRunnable)
+        scheduleNext()
+    }
+
+    private fun scheduleNext() {
+        if (!frameScheduled && loop && attached && !paused) {
+            frameScheduled = true
+            frameChoreographer.postFrameCallback(frameCallback)
         }
     }
 
