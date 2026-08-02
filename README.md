@@ -18,7 +18,7 @@ app/src/main/
 │   ├── k/p/...                # 应用本体
 │   └── local/kcn/...          # 开发者自用库（日志/数学/视图）
 ├── res/
-│   ├── drawable/              # 原图（36 张，含 progress_rate.9.png）
+│   ├── drawable/              # 原图（37 张已转无损 WebP，progress_rate.9.png 保持 PNG）
 │   ├── layout/                # apktool 解码的布局（11 个）
 │   └── values/ids.xml         # 从 resources.arsc 恢复的 id 声明
 └── jniLibs/
@@ -103,6 +103,7 @@ AGP 9.3.1 默认将 .so 按 16KB 页对齐(`android.nativeLibraryAlignmentPageSi
 | SDK 级别 | `minSdk 8→26`(Android 8.0)、`targetSdk 15→36`(Android 16) |
 | 16KB 页 | `extractNativeLibs=false` 时 so 从 zip 直接映射;AGP 9.3.1 默认按 16KB 对齐打包,产物直接兼容 16KB 页设备 |
 | 图标 | 自适应图标(adaptive icon,深蓝灰底 + 原版宠物图) |
+| 图片格式 | 37 张 PNG → 无损 WebP(省 35%,全量逐像素验证一致;9-patch 必须保持 PNG) |
 | Application | 新增 `PetApplication` 统一初始化(数据目录、通知渠道) |
 | 版本号 | versionCode 3→4, versionName 1.0.2→1.1.0 |
 
