@@ -220,7 +220,7 @@ open class PetView : BaseDesktopView {
             ViewService.sliderView!!.hide()
             showControl = false
         }
-        if (DialogService.currentDialogView != null) {
+        if (DialogService.currentDialog != null) {
             DialogService.clearDialog()
         }
     }
@@ -230,7 +230,7 @@ open class PetView : BaseDesktopView {
     }
 
     override fun onClick(x: Float, y: Float) {
-        if (DialogService.currentDialogView == null && lastClickTime <= 0) {
+        if (DialogService.currentDialog == null && lastClickTime <= 0) {
             lastClickTime = MIN_CLICK_INTERVAL
             if (showControl) {
                 ViewService.sliderHandlerView!!.hide()

@@ -407,7 +407,7 @@ open class SliderView : BaseDesktopView {
     }
 
     override fun onClick(x: Float, y: Float) {
-        if (DialogService.currentDialogView == null) {
+        if (DialogService.currentDialog == null) {
             val realY = y + currentSliderItemList!!.currentPosition
             for (view in currentSliderItemList!!.sliderItemList) {
                 if (realY > view.getPosition() && realY < view.getPosition() + view.getHeight()) {

@@ -55,13 +55,6 @@ open class MainService : Service() {
     val handler: Handler = object : Handler() {
         override fun handleMessage(msg: Message) {
             when (msg.what) {
-                0 -> {
-                    if (DialogService.currentDialogView != null) {
-                        this@MainService.windowManager!!.addView(DialogService.currentDialogView, DialogService.currentDialogView!!.layoutParams)
-                        return
-                    }
-                    return
-                }
                 1 -> {
                     try {
                         val e = msg.obj as Exception
@@ -254,10 +247,6 @@ open class MainService : Service() {
         }
         LogUtil.log("cannot get pet")
         exit()
-    }
-
-    fun requestNewDialog() {
-        handler.sendEmptyMessage(0)
     }
 
     fun showSongView() {
