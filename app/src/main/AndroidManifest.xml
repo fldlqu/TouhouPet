@@ -10,6 +10,8 @@
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="29"/>
     <!-- Android 13+ 通知权限(前台服务通知) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <!-- 开机自启(桌面宠物常驻恢复) -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <application android:hardwareAccelerated="true" android:icon="@mipmap/ic_launcher"
         android:label="TouhouPet" android:name=".PetApplication">
         <activity android:exported="true" android:label="TouhouPet" android:name=".TouhouPet">
@@ -24,6 +26,11 @@
                 android:value="desktop_pet_overlay"/>
         </service>
         <receiver android:exported="false" android:name="k.p.modern.DevReceiver"/>
+        <receiver android:exported="true" android:name=".BootReceiver">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED"/>
+            </intent-filter>
+        </receiver>
         <receiver android:exported="false" android:name=".NotificationReceiver">
             <intent-filter android:priority="1000">
                 <action android:name="thp"/>

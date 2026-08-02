@@ -9,6 +9,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.Environment
+import android.os.PowerManager
 import android.provider.Settings
 import android.util.Log
 import android.view.Window
@@ -31,6 +32,7 @@ class TouhouPet : Activity() {
     private var initialized = false
     private var overlayDialogShown = false
     private var storageDialogShown = false
+    private var batteryDialogShown = false
 
     public override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -55,6 +57,14 @@ class TouhouPet : Activity() {
     public override fun onResume() {
         super.onResume()
         if (initialized) {
+            return
+        }
+        /* 电池优化引导:悬浮窗+存储已齐后, 非阻塞地提示一次 */
+        if (Settings.canDrawOverlays(this) && hasStoragePermission() &&
+            !batteryGuideDone() && !isIgnoringBatteryOptimizations() && !batteryDialogShown
+        ) {
+            batteryDialogShown = true
+            showBatteryGuideDialog()
             return
         }
         /* 已引导过一次(Oppo/部分系统上已授权但 API 仍返回 false, 否则每次启动都弹) */
@@ -85,6 +95,57 @@ class TouhouPet : Activity() {
     private fun markGuideDone() {
         getSharedPreferences("thp_prefs", MODE_PRIVATE)
             .edit().putBoolean("permission_guide_done", true).apply()
+    }
+
+    /* 电池优化引导独立标记(不影响主权限引导链) */
+    private fun batteryGuideDone(): Boolean {
+        return getSharedPreferences("thp_prefs", MODE_PRIVATE)
+            .getBoolean("battery_guide_done", false)
+    }
+
+    private fun markBatteryGuideDone() {
+        getSharedPreferences("thp_prefs", MODE_PRIVATE)
+            .edit().putBoolean("battery_guide_done", true).apply()
+    }
+
+    /* API 23+ 可忽略电池优化;早期系统无此概念视为已满足 */
+    private fun isIgnoringBatteryOptimizations(): Boolean {
+        if (Build.VERSION.SDK_INT < 23) {
+            return true
+        }
+        val pm = getSystemService(POWER_SERVICE) as PowerManager
+        return pm.isIgnoringBatteryOptimizations(packageName)
+    }
+
+    private fun showBatteryGuideDialog() {
+        try {
+            AlertDialog.Builder(this)
+                .setTitle("建议:允许后台运行")
+                .setMessage(
+                    "TouhouPet 是桌面常驻宠物, 建议将其加入\"电池优化例外\", " +
+                        "避免系统在后台清理时把它回收。\n\n" +
+                        "点击\"去设置\"后在系统中选择\"允许/无限制\", 返回后即可。"
+                )
+                .setPositiveButton("去设置") { _, _ ->
+                    markBatteryGuideDone()
+                    try {
+                        val intent = Intent(
+                            Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                            Uri.parse("package:" + packageName)
+                        )
+                        startActivity(intent)
+                    } catch (e: Exception) {
+                        LogUtil.log(e)
+                    }
+                }
+                .setNegativeButton("暂不") { _, _ ->
+                    markBatteryGuideDone()
+                }
+                .setOnDismissListener { batteryDialogShown = false }
+                .show()
+        } catch (e: Exception) {
+            LogUtil.log(e)
+        }
     }
 
     /* Android 11+(API 30):"所有文件访问";API 26-29:WRITE_EXTERNAL_STORAGE 运行时权限 */

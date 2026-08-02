@@ -126,6 +126,9 @@ open class MainService : Service() {
     override fun onCreate() {
         context = this
         windowManager = getApplicationContext().getSystemService(WindowManager::class.java)
+        /* 开机自启标记: 服务活着即写; exit 清除(用户主动退出不自动恢复, 被系统回收/重启则恢复) */
+        getSharedPreferences("thp_prefs", MODE_PRIVATE)
+            .edit().putBoolean("boot_restore", true).apply()
         try {
             initLog()
         } catch (e1: Exception) {
@@ -283,6 +286,8 @@ open class MainService : Service() {
             return /* 幂等:异常链可能多次触发 exit */
         }
         exited = true
+        getSharedPreferences("thp_prefs", MODE_PRIVATE)
+            .edit().putBoolean("boot_restore", false).apply()
         SongService.exit()
         if (gameLoop != null) {
             gameLoop!!.stop()
@@ -305,6 +310,8 @@ open class MainService : Service() {
             return /* 幂等 */
         }
         exited = true
+        getSharedPreferences("thp_prefs", MODE_PRIVATE)
+            .edit().putBoolean("boot_restore", false).apply()
         if (gameLoop != null) {
             gameLoop!!.stop()
         }

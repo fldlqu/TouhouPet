@@ -2,11 +2,15 @@ package k.p.song
 
 import android.content.Context
 import android.database.Cursor
+import android.media.AudioAttributes
+import android.media.AudioFocusRequest
+import android.media.AudioManager
 import android.media.MediaMetadata
 import android.media.MediaPlayer
 import android.media.session.MediaSession
 import android.media.session.PlaybackState
 import android.os.Handler
+import android.os.Looper
 import android.os.Message
 import android.os.SystemClock
 import android.provider.MediaStore
@@ -43,6 +47,11 @@ object SongService {
     private var listView: ListView? = null
     private var mediaPlayer: MediaPlayer? = null
     private var mediaSession: MediaSession? = null
+    private var audioManager: AudioManager? = null
+    private var audioFocusRequest: AudioFocusRequest? = null
+    private var ducking = false
+    private var resumeAfterFocusLoss = false
+    private val focusHandler = Handler(Looper.getMainLooper())
     private var nextButton: ImageView? = null
     private var playButton: ImageView? = null
     private var playMode = 0
@@ -74,6 +83,19 @@ object SongService {
         songList = ArrayList()
         viewArray = SparseArray()
         mediaPlayer = MediaPlayer()
+        audioManager = context2.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+        audioFocusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
+            .setAudioAttributes(
+                AudioAttributes.Builder()
+                    .setUsage(AudioAttributes.USAGE_MEDIA)
+                    .setContentType(AudioAttributes.CONTENT_TYPE_MUSIC)
+                    .build()
+            )
+            .setOnAudioFocusChangeListener { focusChange ->
+                /* 焦点回调在非 UI 线程, 播放逻辑触碰界面控件, 切到主线程 */
+                focusHandler.post { onFocusChange(focusChange) }
+            }
+            .build()
         mediaSession = MediaSession(context2, "TouhouPet").apply {
             setCallback(object : MediaSession.Callback() {
                 override fun onPlay() = resumePlayback()
@@ -238,6 +260,7 @@ object SongService {
         }
         mediaPlayer!!.setOnPreparedListener {
             mediaPlayer!!.start()
+            requestFocusIfNeeded()
             syncSession()
         }
         if (songList!!.size > 0) {
@@ -395,6 +418,14 @@ object SongService {
         mediaSession?.isActive = false
         mediaSession?.release()
         mediaSession = null
+        audioFocusRequest?.let { req ->
+            try {
+                audioManager?.abandonAudioFocusRequest(req)
+            } catch (e: Exception) {
+            }
+        }
+        audioManager = null
+        audioFocusRequest = null
         songView = null
         songMenuView = null
         songLoaded = false
@@ -403,7 +434,9 @@ object SongService {
     }
 
     private fun resumePlayback() {
+        resumeAfterFocusLoss = false
         mediaPlayer!!.start()
+        requestFocusIfNeeded()
         playing = true
         playButton!!.setImageResource(R.drawable.song_pause)
         syncSession()
@@ -495,6 +528,51 @@ object SongService {
                 .setState(pbState, pos, 1f)
                 .build()
         )
+    }
+
+    private fun requestFocusIfNeeded() {
+        val afr = audioFocusRequest ?: return
+        val am = audioManager ?: return
+        try {
+            am.requestAudioFocus(afr)
+        } catch (e: Exception) {
+        }
+    }
+
+    /* 音频焦点变化(已在主线程): 来电/其他应用播放时礼让, 结束后恢复 */
+    private fun onFocusChange(focusChange: Int) {
+        when (focusChange) {
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
+                resumeAfterFocusLoss = playing
+                pausePlayback()
+            }
+            AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
+                if (playing) {
+                    ducking = true
+                    try {
+                        mediaPlayer!!.setVolume(0.25f, 0.25f)
+                    } catch (e: Exception) {
+                    }
+                }
+            }
+            AudioManager.AUDIOFOCUS_LOSS -> {
+                resumeAfterFocusLoss = false
+                pausePlayback()
+            }
+            AudioManager.AUDIOFOCUS_GAIN -> {
+                if (ducking) {
+                    ducking = false
+                    try {
+                        mediaPlayer!!.setVolume(1f, 1f)
+                    } catch (e: Exception) {
+                    }
+                }
+                if (resumeAfterFocusLoss) {
+                    resumeAfterFocusLoss = false
+                    resumePlayback()
+                }
+            }
+        }
     }
 
     @JvmStatic
