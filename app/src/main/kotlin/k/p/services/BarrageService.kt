@@ -82,19 +82,24 @@ class BarrageService private constructor() {
                 keep
             },
             Runnable {
-                var winner: String
-                if (player!!.currentHP <= 0) {
-                    winner = target!!.name + " 获得了胜利!"
-                } else {
-                    winner = player!!.name + " 获得了胜利!"
-                }
-                putString(winner)
-                handler.sendEmptyMessage(0)
-                MainService.context!!.removeBarrageView()
-                if (player!!.currentHP <= 0) {
-                    target!!.onLose(PetService.pet!!)
-                } else {
-                    target!!.onWin(PetService.pet!!)
+                /* 结算 UI 操作(removeView/弹窗 inflate+addView)必须在主线程:
+                 * Tasks.loop 在 Default 池执行, 直接在此线程 removeView 会
+                 * 触发 View 体系线程校验崩溃。收尾统一切回主线程执行。 */
+                MainService.context?.handler?.post {
+                    var winner: String
+                    if (player!!.currentHP <= 0) {
+                        winner = target!!.name + " 获得了胜利!"
+                    } else {
+                        winner = player!!.name + " 获得了胜利!"
+                    }
+                    putString(winner)
+                    handler.sendEmptyMessage(0)
+                    MainService.context!!.removeBarrageView()
+                    if (player!!.currentHP <= 0) {
+                        target!!.onLose(PetService.pet!!)
+                    } else {
+                        target!!.onWin(PetService.pet!!)
+                    }
                 }
             }
         )

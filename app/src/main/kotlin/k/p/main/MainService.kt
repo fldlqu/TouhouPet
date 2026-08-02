@@ -94,7 +94,11 @@ open class MainService : Service() {
                     return
                 }
                 UPDATE_BARRAGEVIEW -> {
-                    this@MainService.windowManager!!.updateViewLayout(BarrageService.barrageView, BarrageService.barrageView!!.layoutParams)
+                    try {
+                        this@MainService.windowManager!!.updateViewLayout(BarrageService.barrageView, BarrageService.barrageView!!.layoutParams)
+                    } catch (e: Exception) {
+                        /* 窗口已移除(结算/退出)时 updateViewLayout 抛异常, 忽略 */
+                    }
                     return
                 }
                 else -> {
@@ -285,7 +289,12 @@ open class MainService : Service() {
     }
 
     fun removeBarrageView() {
-        windowManager!!.removeView(BarrageService.barrageView)
+        try {
+            windowManager!!.removeView(BarrageService.barrageView)
+        } catch (e: Exception) {
+            /* 幂等: 结算恰逢窗口已移除(重复结算/用户退出)时 removeView 抛异常, 忽略 */
+        }
+        BarrageService.barrageView = null
     }
 
     private var exited = false
