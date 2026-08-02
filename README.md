@@ -52,8 +52,10 @@ arm64 设备加载 arm64-v8a；32 位设备加载 armeabi-v7a（重新编译版�
 ```bash
 ./gradlew assembleDebug   # → app/build/outputs/apk/debug/app-debug.apk
 ./gradlew assembleRelease # → app/build/outputs/apk/release/app-release.apk(debug key 签名)
-./tools/align16k.sh       # → *-16k.apk:Android 16 (16KB 页)兼容的 16KB 对齐版
 ```
+
+AGP 9.3.1 默认将 .so 按 16KB 页对齐(`android.nativeLibraryAlignmentPageSize` 默认 16384),
+产物直接兼容 Android 16 的 16KB 页设备,无需额外处理。
 
 工具链：Gradle 9.6.1 / AGP 9.3.1 / JDK 26 / compileSdk 35，
 **main 分支:`minSdk 26 / targetSdk 36 / versionCode 4 / versionName 1.1.0`**；
@@ -99,7 +101,7 @@ arm64 设备加载 arm64-v8a；32 位设备加载 armeabi-v7a（重新编译版�
 | 前台服务 | `startForeground` 带 `specialUse` 类型 + 声明(Android 14+ 必须);通知改用 Channel + Builder;PendingIntent 加 `FLAG_IMMUTABLE`(targetSdk 31+ 必须) |
 | 权限声明 | 移除 `WRITE_EXTERNAL_STORAGE`;新增 `POST_NOTIFICATIONS`(Android 13+ 运行时请求,不阻塞);移除无效的 `persistent="true"` |
 | SDK 级别 | `minSdk 8→26`(Android 8.0)、`targetSdk 15→36`(Android 16) |
-| 16KB 页 | `extractNativeLibs=false` 时 so 从 zip 直接映射;`tools/align16k.sh` 产出 16KB 对齐 APK(16KB 页设备必需) |
+| 16KB 页 | `extractNativeLibs=false` 时 so 从 zip 直接映射;AGP 9.3.1 默认按 16KB 对齐打包,产物直接兼容 16KB 页设备 |
 | 图标 | 自适应图标(adaptive icon,深蓝灰底 + 原版宠物图) |
 | Application | 新增 `PetApplication` 统一初始化(数据目录、通知渠道) |
 | 版本号 | versionCode 3→4, versionName 1.0.2→1.1.0 |
@@ -119,7 +121,7 @@ arm64 设备加载 arm64-v8a；32 位设备加载 armeabi-v7a（重新编译版�
 - 应用数据（宠物存档/动画 XML）存于 SD 卡 `TouhouPet/` 目录，不在 APK 内，无法从本 APK 恢复。
 - 原版 `libencrypt.so` 仅含 armeabi 且带 TEXTREL（2012 年产物，targetSdk<23 豁免）；
   本项目以反汇编还原源码重新编译 `arm64-v8a` + `armeabi-v7a`（见上节），行为等价、无 TEXTREL，
-  16KB 页设备用 `tools/align16k.sh` 的对齐版。
+  16KB 页设备直接可用(AGP 默认 16KB 对齐)。
 - 编译验证用的是 API 17 的 android.jar；若用更高 compileSdk 构建，`@SuppressLint` 等标注
   行为一致，但悬浮窗 API 需按上条调整。
 
