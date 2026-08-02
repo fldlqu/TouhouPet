@@ -2,7 +2,10 @@ package k.p.song
 
 import android.content.Context
 import android.database.Cursor
+import android.media.MediaMetadata
 import android.media.MediaPlayer
+import android.media.session.MediaSession
+import android.media.session.PlaybackState
 import android.os.Handler
 import android.os.Message
 import android.os.SystemClock
@@ -39,6 +42,7 @@ object SongService {
     private var lastClickTime = 0L
     private var listView: ListView? = null
     private var mediaPlayer: MediaPlayer? = null
+    private var mediaSession: MediaSession? = null
     private var nextButton: ImageView? = null
     private var playButton: ImageView? = null
     private var playMode = 0
@@ -70,6 +74,14 @@ object SongService {
         songList = ArrayList()
         viewArray = SparseArray()
         mediaPlayer = MediaPlayer()
+        mediaSession = MediaSession(context2, "TouhouPet").apply {
+            setCallback(object : MediaSession.Callback() {
+                override fun onPlay() = resumePlayback()
+                override fun onPause() = pausePlayback()
+                override fun onSkipToNext() = playNext()
+                override fun onSkipToPrevious() = playPrevious()
+            })
+        }
         val cursor = context2.contentResolver.query(
             MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
             arrayOf("_id", "_display_name", "title", "duration", "artist", "album", "year", "mime_type", "_size", "_data"),
@@ -154,59 +166,17 @@ object SongService {
         playButton!!.setOnClickListener {
             if (songList!!.size > 0) {
                 if (playing) {
-                    mediaPlayer!!.pause()
-                    playing = false
-                    playButton!!.setImageResource(R.drawable.song_play)
+                    pausePlayback()
                 } else {
-                    mediaPlayer!!.start()
-                    playing = true
-                    playButton!!.setImageResource(R.drawable.song_pause)
+                    resumePlayback()
                 }
             }
         }
         previousButton!!.setOnClickListener {
-            if (songList!!.size > 0) {
-                var i = currentPosition - 1
-                currentPosition = i
-                if (i < 0) {
-                    currentPosition = songList!!.size - 1
-                }
-                currentSongInfo = songList!!.get(currentPosition)
-                totalTime!!.text = getTimeFromDuration(currentSongInfo!!.duration)
-                seekBar!!.max = currentSongInfo!!.duration
-                seekBar!!.progress = 0
-                songName!!.text = currentSongInfo!!.songName
-                mediaPlayer!!.stop()
-                playButton!!.setImageResource(R.drawable.song_pause)
-                mediaPlayer!!.reset()
-                try {
-                    mediaPlayer!!.setDataSource(currentSongInfo!!.filePath)
-                    mediaPlayer!!.prepare()
-                } catch (e: Exception) {
-                }
-            }
+            playPrevious()
         }
         nextButton!!.setOnClickListener {
-            if (songList!!.size > 0) {
-                var i = currentPosition + 1
-                currentPosition = i
-                if (i > songList!!.size) {
-                    currentPosition = 0
-                }
-                currentSongInfo = songList!!.get(currentPosition)
-                totalTime!!.setText(getTimeFromDuration(currentSongInfo!!.duration))
-                seekBar!!.max = currentSongInfo!!.duration
-                seekBar!!.progress = 0
-                songName!!.text = currentSongInfo!!.songName
-                mediaPlayer!!.stop()
-                mediaPlayer!!.reset()
-                playButton!!.setImageResource(R.drawable.song_pause)
-                try {
-                    mediaPlayer!!.setDataSource(currentSongInfo!!.filePath)
-                    mediaPlayer!!.prepare()
-                } catch (e: Exception) {
-                }
-            }
+            playNext()
         }
         songListButton!!.setOnClickListener {
             requestSongView()
@@ -268,6 +238,7 @@ object SongService {
         }
         mediaPlayer!!.setOnPreparedListener {
             mediaPlayer!!.start()
+            syncSession()
         }
         if (songList!!.size > 0) {
             currentPosition = Random().nextInt(songList!!.size)
@@ -421,11 +392,109 @@ object SongService {
             mediaPlayer!!.release()
             mediaPlayer = null
         }
+        mediaSession?.isActive = false
+        mediaSession?.release()
+        mediaSession = null
         songView = null
         songMenuView = null
         songLoaded = false
         songList = null
         viewArray = null
+    }
+
+    private fun resumePlayback() {
+        mediaPlayer!!.start()
+        playing = true
+        playButton!!.setImageResource(R.drawable.song_pause)
+        syncSession()
+    }
+
+    private fun pausePlayback() {
+        mediaPlayer!!.pause()
+        playing = false
+        playButton!!.setImageResource(R.drawable.song_play)
+        syncSession()
+    }
+
+    private fun playPrevious() {
+        if (songList!!.size > 0) {
+            var i = currentPosition - 1
+            currentPosition = i
+            if (i < 0) {
+                currentPosition = songList!!.size - 1
+            }
+            currentSongInfo = songList!!.get(currentPosition)
+            totalTime!!.text = getTimeFromDuration(currentSongInfo!!.duration)
+            seekBar!!.max = currentSongInfo!!.duration
+            seekBar!!.progress = 0
+            songName!!.text = currentSongInfo!!.songName
+            mediaPlayer!!.stop()
+            mediaPlayer!!.reset()
+            playButton!!.setImageResource(R.drawable.song_pause)
+            try {
+                mediaPlayer!!.setDataSource(currentSongInfo!!.filePath)
+                mediaPlayer!!.prepare()
+            } catch (e: Exception) {
+            }
+        }
+    }
+
+    private fun playNext() {
+        if (songList!!.size > 0) {
+            var i = currentPosition + 1
+            currentPosition = i
+            if (i > songList!!.size) {
+                currentPosition = 0
+            }
+            currentSongInfo = songList!!.get(currentPosition)
+            totalTime!!.setText(getTimeFromDuration(currentSongInfo!!.duration))
+            seekBar!!.max = currentSongInfo!!.duration
+            seekBar!!.progress = 0
+            songName!!.text = currentSongInfo!!.songName
+            mediaPlayer!!.stop()
+            mediaPlayer!!.reset()
+            playButton!!.setImageResource(R.drawable.song_pause)
+            try {
+                mediaPlayer!!.setDataSource(currentSongInfo!!.filePath)
+                mediaPlayer!!.prepare()
+            } catch (e: Exception) {
+            }
+        }
+    }
+
+    private fun syncSession() {
+        val ms = mediaSession ?: return
+        val info = currentSongInfo
+        if (info != null) {
+            ms.setMetadata(
+                MediaMetadata.Builder()
+                    .putString(MediaMetadata.METADATA_KEY_TITLE, info.songName ?: "")
+                    .putString(MediaMetadata.METADATA_KEY_ARTIST, info.artist ?: "")
+                    .putLong(MediaMetadata.METADATA_KEY_DURATION, info.duration.toLong())
+                    .build()
+            )
+        }
+        val playingNow = try {
+            mediaPlayer?.isPlaying == true
+        } catch (e: Exception) {
+            false
+        }
+        ms.isActive = true
+        val pbState = if (playingNow) PlaybackState.STATE_PLAYING else PlaybackState.STATE_PAUSED
+        val pos = try {
+            (mediaPlayer?.currentPosition ?: 0).toLong()
+        } catch (e: Exception) {
+            0L
+        }
+        ms.setPlaybackState(
+            PlaybackState.Builder()
+                .setActions(
+                    PlaybackState.ACTION_PLAY or PlaybackState.ACTION_PAUSE or PlaybackState.ACTION_PLAY_PAUSE or
+                        PlaybackState.ACTION_SKIP_TO_NEXT or PlaybackState.ACTION_SKIP_TO_PREVIOUS
+                )
+                .setState(pbState, pos, 1f)
+                .build()
+        )
     }
 
     @JvmStatic
