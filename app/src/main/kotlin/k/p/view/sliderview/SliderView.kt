@@ -69,7 +69,7 @@ open class SliderView : BaseDesktopView {
         (workList as WorkSliderItemList).refreshWorkInfo()
     }
 
-    /* 摇晃移动开关状态(thp_prefs 持久化, 默认关) */
+    /* 从 prefs 读开关(默认关) */
     private fun isShakeEnabled(): Boolean {
         return context.getSharedPreferences("thp_prefs", Context.MODE_PRIVATE)
             .getBoolean("shake_move", false)
@@ -257,7 +257,7 @@ open class SliderView : BaseDesktopView {
                         DialogService.changeNameDialog()
                     }
                 })
-                /* 摇晃移动开关(持久化 thp_prefs; 开启后摇晃手机宠物随机换位置) */
+                /* 摇晃移动开关: 手持挥动时宠物随晃动方向移动 */
                 addSliderItemView(object : BaseSliderTextButton(this@SliderView, "") {
                     private val shakeHint: String
                         get() = if (isShakeEnabled()) "摇晃移动:开" else "摇晃移动:关"
@@ -282,8 +282,6 @@ open class SliderView : BaseDesktopView {
                         this@SliderView.toast(if (enabled) "摇晃移动:开(摇晃手机宠物换位置)" else "摇晃移动:关")
                     }
                 })
-                /* 帧率上限: 跟随系统(system-preferred) / 40 / 60 轮换。
-                 * system 取系统刷新率(defaultDisplay.refreshRate), 120Hz 屏可到 120fps。 */
                 addSliderItemView(object : BaseSliderTextButton(this@SliderView, "") {
                     private val modeList = arrayOf("system", "40", "60")
                     private val fpsHint: String
@@ -517,10 +515,9 @@ open class SliderView : BaseDesktopView {
         currentSliderItemList = locationMap[targetY]
     }
 
-    /* 帧率档位的全局应用:
-     * - system: BaseView.MAX_FPS = 系统刷新率(60/90/120Hz), 所有 view 目标帧率同步为系统刷新率
-     * - 40/60: 所有 view 目标帧率固定为该值
-     * 设定切换与启动时(MainService 创建完 4 个 view)调用。 */
+    /* 帧率档位的统一入口: 启动时(MainService 建完 view)与设定切换时调用。
+     * system 档直接用系统刷新率而不是继续限在 40/60: 否则高刷屏上
+     * 动画无法跟手(宠物移动拖影)。档位变化后所有 view 目标帧率统一。 */
     fun applyFrameRateCeiling() {
         val pref = context.getSharedPreferences("thp_prefs", Context.MODE_PRIVATE)
             .getString("frame_rate_max", "system") ?: "system"

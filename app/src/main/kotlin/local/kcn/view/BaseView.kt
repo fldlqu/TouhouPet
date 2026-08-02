@@ -25,36 +25,26 @@ import java.util.ArrayList
 /**
  * 渲染基座: 普通 View(onDraw) 替代原 SurfaceView + lockCanvas 自绘体系。
  *
- * 与旧 BaseSurfaceView 的差异(仅渲染驱动层):
- * - SurfaceView(独立 Surface / 后台线程 lockCanvas) → View(onDraw 主线程绘制)
- * - 表面尺寸: SurfaceView 由系统决定 → View 由 WindowManager 布局尺寸决定
- *   (悬浮窗经 DesktopService 挂载, params.width/height 即绘制尺寸)
- * - 表面生命周期: onAttachedToWindow/onDetachedFromWindow 替代
- *   surfaceCreated/surfaceDestroyed, 不可见即暂停可见即恢复
+ * 换基座的原因: SurfaceView 的独立 Surface 与锁屏线程, 同悬浮窗叠加、窗口合成、
+ * 现代动画体系的交互摩擦大; 普通 View 由系统 ViewRoot 统一合成, 兼容性好。
  *
- * 保持不变的业务语义:
- * - MAX_FPS 档位(跟随系统/40/60, 设定可调变) + updateInterval 节拍(Choreographer
- *   vsync 对齐帧调度)
- * - paused / requestPause / requestStop / startDraw 全部保留
- * - updateStatus(time) 返回 true 才真正 invalidate 重绘(与旧版"返回值决定 lockCanvas"一致)
- * - loadBitmap/releaseBitmap 资源链与 bitmapList 回收完全保留
- * - protected 字段/方法签名不变, Kotlin 子类无需改动
+ * 对子类保持不变的契约(改动需谨慎):
+ * - updateStatus(time) 返回 true 才 invalidate → 决定真重绘(旧版返回值决定 lockCanvas)
+ * - requestPause / requestStop / startDraw 语义
+ * - loadBitmap/releaseBitmap 资源链与 bitmapList 回收
+ * - protected 字段/签名(子类零改动)
  *
- * 渲染后端: 默认硬件加速(不设 SOFT 层)。子类 update 里 clearPaint(CLEAR)
- * 的 PorterDuff 模式在 hardware canvas 受支持(官方能力表仅 ADD/LIGHTEN/OVERLAY
- * 等 framebuffer 混合受 API 限制), 故不需要软件离屏层。
+ * 渲染后端: 硬件加速(不设软件层)。子类 update 用 clearPaint(CLEAR) 清屏,
+ * 该模式在 hardware canvas 受支持, 悬浮窗透明无需软件离屏层。
  *
- * 状态机(与旧 BaseSurfaceView 等价):
- * - startDraw() 仅是"请求开始"标志(addView 场景下由 DesktopService 调用)
- * - onAttachedToWindow 时若请求过且未暂停 → 启动帧循环
- * - onDetachedFromWindow → 停帧 + paused=true(对应 surfaceDestroyed -- requestPause)
- * - requestPause 停帧; 下次 attach 恢复
- * - requestStop 终止并释放资源
+ * 帧调度与线程模型:
+ * - 帧节拍走主线程 + Choreographer vsync(非后台线程 lockCanvas), 见 onFrameTick
+ * - 生命周期: attach 时若请求过且未暂停 → 启动帧循环; detach → 停帧 + paused
  */
 open class BaseView : View {
     companion object {
-        /** 最大帧率上限(所有 view 的 setCurrentFPS clamp 到该值)。
-         * 可在设定中调整: system(系统刷新率, system-preferred) 或 30/40/60。 */
+        /** 帧率上限与目标档位: 设定可切换"跟随系统(系统刷新率)/40/60",
+         * 所有 view 的 setCurrentFPS 都被 clamp 到此值, 档位变更即全局统一。 */
         @JvmField
         var MAX_FPS = 40.0f
 
@@ -64,11 +54,10 @@ open class BaseView : View {
         @JvmField
         val TAG = "BaseView"
 
-        /* 活跃实例注册表: 档位变更时统一刷新所有 view(含 MainView 等不属
-         * ViewService 的实例)。attach 时注册, detach 时移除, 防泄漏。 */
+        /* 为什么不直接用 ViewService: 档位须覆盖不在 ViewService 里的窗口视图
+         * (如 MainView)。构造注册, detach 注销。 */
         private val activeViews = java.util.concurrent.CopyOnWriteArrayList<BaseView>()
 
-        /** 档位变更后把所有活跃 view 的目标帧率统一为 MAX_FPS */
         @JvmStatic
         fun applyMaxFpsToActive() {
             for (view in activeViews) {
@@ -127,12 +116,8 @@ open class BaseView : View {
     @JvmField
     protected var updateStatusWhenPaused = false
 
-    /** 异步初始化作用域(构造时启动) */
     private val asyncScope = AppScopes.newDefault()
 
-    /** 帧调度: Choreographer 对齐 vsync(替代 Handler 自由节拍)。
-     * vsync 每屏幕刷新一拍, 帧是否推进由 updateInterval 换算的 elapsed 判定,
-     * 60fps 档在 60Hz 屏即每 vsync 一帧, 120Hz 屏 60fps 档隔帧推进。 */
     private val frameChoreographer = Choreographer.getInstance()
     private val frameCallback = object : Choreographer.FrameCallback {
         override fun doFrame(frameTimeNanos: Long) {
@@ -143,7 +128,7 @@ open class BaseView : View {
     private var attached = false
     private var frameRequested = false
     private var stopped = false
-    /** 下一帧到期基准(累加式节拍, 见 onFrameTick) */
+    /** 累加式到期基准: 推帧后 + interval, 见 onFrameTick */
     private var lastFrameDue = 0L
 
     constructor(context: Context) : this(context, null)
@@ -155,13 +140,10 @@ open class BaseView : View {
         frames = 0
         offset = 0L
         res = context.resources
-        /* 硬件加速(默认): 悬浮窗 View 走 GPU 合成。
-         * 子类 update 里的 clearPaint(CLEAR) 在 hardware canvas 上受支持
-         * (官方 PorterDuff 能力表), 无需软件离屏层。 */
         init0()
         setWillNotDraw(false)
-        /* 构造即注册(非 attach): 启动时档位应用在 show() 之前就需生效;
-         * detach 时注销防泄漏。 */
+        /* 帧率档位必须先于 UI 挂载生效(启动时 applyFrameRateCeiling 在
+         * addView 之前执行), 所以构造即注册而非 attach 时注册。 */
         activeViews.add(this)
         asyncScope.launch {
             asyncInit()
@@ -169,7 +151,7 @@ open class BaseView : View {
         }
     }
 
-    /** 请求开始绘制(原 startDraw + holder.addCallback)。attach 前调用只记标志。 */
+    /** 请求开始绘制: attach 前调用只记标志, 挂载后才真正启动帧循环 */
     fun startDraw() {
         frameRequested = true
         currentTime = SystemClock.elapsedRealtime()
@@ -228,11 +210,10 @@ open class BaseView : View {
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
-        activeViews.add(this)
         attached = true
         if (!stopped) {
             if (paused) {
-                paused = false /* 原 surfaceCreated 语义: attach 恢复 */
+                paused = false /* attach 即恢复(原 surfaceCreated) */
             }
             if (frameRequested && !paused) {
                 startFrameLoop()
@@ -245,7 +226,7 @@ open class BaseView : View {
         attached = false
         stopFrameLoop()
         if (!paused && !stopped) {
-            paused = true /* 原 surfaceDestroyed 语义: 不可见即暂停 */
+            paused = true /* 不可见即暂停(原 surfaceDestroyed) */
         }
         super.onDetachedFromWindow()
     }
@@ -263,7 +244,6 @@ open class BaseView : View {
         frameChoreographer.removeFrameCallback(frameCallback)
     }
 
-    /** 一帧节拍(vsync 驱动): 时间推进 + updateStatus + 可选 invalidate(对应旧 loop 前半段) */
     private fun onFrameTick() {
         if (frameScheduled) {
             frameScheduled = false
@@ -272,16 +252,11 @@ open class BaseView : View {
             return
         }
         val elapsed = SystemClock.elapsedRealtime()
-        /* 帧间隔决策(vsync 对齐版): 累计经过时间达到 updateInterval(目标帧间隔)才推帧。
-         * lastFrameDue 采用累加式(next = last + interval), 误差不随时间累积:
-         * - 60Hz 屏 60fps: 每 vsync 一帧; 40fps: 每 2~3 vsync 推一帧(约 30fps, 因 40 与
-         *   60 不是整数比, vsync 对齐必然在 30/60 之间取;旧 Handler 25ms 自由节拍在 60Hz
-         *   屏同样是 30~40 抖动, 现状不劣)
-         * - 若绘制耗时越过 interval, updateStatus 一次只推一帧, 帧率自然下降不堆积 */
+        /* vsync 对齐帧频: 用累加式到期基准(lastFrameDue += interval)而非
+         * 简单比较 elapsed - lastTime, 后者误差随时间累积、帧间隔漂移。 */
         val intervalMs = updateInterval.coerceAtLeast(1).toLong()
         if (elapsed - lastFrameDue < intervalMs) {
-            /* 未到下一帧: 继续对齐 vsync 等待 */
-            scheduleNext()
+            scheduleNext() /* 未到期: 下个 vsync 再来 */
             return
         }
         val time = (elapsed - lastFrameDue).toInt()
@@ -291,8 +266,7 @@ open class BaseView : View {
         offset = elapsed - startTime
         lastFrameDue += intervalMs
         if (elapsed - lastFrameDue >= intervalMs) {
-            /* 帧亏空多于一个间隔: 重置累计基准, 避免追赶式连续推帧(会ADC)。
-             * 基准对齐到当前 el, 之后重新累计。 */
+            /* 绘制耗时越过一个间隔: 基准跳到当前, 防追赶式连发帧风暴 */
             lastFrameDue = elapsed
         }
         if (updateStatus(time)) {
@@ -309,7 +283,7 @@ open class BaseView : View {
     }
 
     override fun onDraw(canvas: Canvas) {
-        /* release0()已回收位图; 若系统因布局/移动再次重绘, 直接跳过防 RecycledBitmap 崩溃 */
+        /* 位图已随 release0() 回收: 系统因布局/移动触发的重绘直接跳过, 否则 RecycledBitmap 崩溃 */
         if (!loop) {
             return
         }

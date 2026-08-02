@@ -97,7 +97,7 @@ open class MainService : Service() {
                     try {
                         this@MainService.windowManager!!.updateViewLayout(BarrageService.barrageView, BarrageService.barrageView!!.layoutParams)
                     } catch (e: Exception) {
-                        /* 窗口已移除(结算/退出)时 updateViewLayout 抛异常, 忽略 */
+                        /* 结算/退出已移除窗口, 布局刷新到此为止即可 */
                     }
                     return
                 }
@@ -294,7 +294,7 @@ open class MainService : Service() {
         try {
             windowManager!!.removeView(BarrageService.barrageView)
         } catch (e: Exception) {
-            /* 幂等: 结算恰逢窗口已移除(重复结算/用户退出)时 removeView 抛异常, 忽略 */
+            /* 重复结算/退出竞态: 窗口可能已被移除, removeView 抛异常无害 */
         }
         BarrageService.barrageView = null
     }

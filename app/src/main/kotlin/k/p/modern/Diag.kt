@@ -4,7 +4,7 @@ import k.p.utils.EnvironmentUtil
 import java.io.File
 import java.io.FileWriter
 
-/** 诊断探针(临时):宠物启动链路打点到数据目录 app.diag.log,真机复现后读取定位 */
+/** 诊断日志: 打点数据目录 app.log, 真机定位用 */
 object Diag {
     private var enabled = true
 
