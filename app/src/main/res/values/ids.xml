@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <id name="achievement_listview" />
+    <id name="songbar_songname" />
+    <id name="songbar_artist" />
+    <id name="alert_title" />
+    <id name="alert_message" />
+    <id name="alert_button" />
+    <id name="settings_listview" />
+    <id name="barrage_enemyname" />
+    <id name="barrage_enemyhp" />
+    <id name="barrage_battlestatus" />
+    <id name="barrage_playername" />
+    <id name="barrage_playerhp" />
+    <id name="changename_edittext" />
+    <id name="changename_sure_button" />
+    <id name="changename_cancel_button" />
+    <id name="confirm_title" />
+    <id name="confirm_message" />
+    <id name="confirm_sure_button" />
+    <id name="confirm_cancel_button" />
+    <id name="imageView1" />
+    <id name="notification_tv_state" />
+    <id name="notification_tv_rd" />
+    <id name="notification_tv_dd" />
+    <id name="notification_tv_en" />
+    <id name="song_listview" />
+    <id name="songmenu_currenttime" />
+    <id name="songmenu_songname" />
+    <id name="songmenu_totaltime" />
+    <id name="songmenu_progress" />
+    <id name="songmenu_playmode" />
+    <id name="songmenu_previous" />
+    <id name="songmenu_play" />
+    <id name="songmenu_next" />
+    <id name="songmenu_songlist" />
+</resources>

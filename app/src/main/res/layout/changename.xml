@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout android:gravity="center_horizontal" android:orientation="vertical" android:background="#cee2ff" android:layout_width="wrap_content" android:layout_height="wrap_content"
+  xmlns:android="http://schemas.android.com/apk/res/android">
+    <TextView android:textSize="20.0dp" android:textColor="@android:color/black" android:gravity="center" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="修改名字" android:layout_weight="10.0" />
+    <View android:background="@android:color/white" android:layout_width="wrap_content" android:layout_height="1.0dp" />
+    <LinearLayout android:gravity="center_vertical" android:orientation="horizontal" android:layout_width="wrap_content" android:layout_height="wrap_content" android:minHeight="80.0dp" android:layout_weight="40.0">
+        <TextView android:textSize="16.0dp" android:textColor="@android:color/black" android:gravity="center" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="新名字 : " android:layout_weight="1.0" />
+        <EditText android:textSize="16.0dp" android:textColor="@android:color/black" android:gravity="center" android:id="@id/changename_edittext" android:layout_width="match_parent" android:layout_height="wrap_content" android:maxLines="1" android:maxLength="20" android:layout_weight="1.0">
+            <requestFocus />
+        </EditText>
+    </LinearLayout>
+    <View android:background="@android:color/white" android:layout_width="wrap_content" android:layout_height="1.0dp" />
+    <LinearLayout android:gravity="center_vertical" android:orientation="horizontal" android:layout_width="wrap_content" android:layout_height="wrap_content">
+        <TextView android:textSize="16.0sp" android:textColor="@android:color/black" android:gravity="center" android:id="@id/changename_sure_button" android:background="@drawable/button_bg" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="10.0dp" android:layout_marginRight="10.0dp" android:layout_marginBottom="10.0dp" android:text="确定" />
+        <TextView android:textSize="16.0sp" android:textColor="@android:color/black" android:gravity="center" android:id="@id/changename_cancel_button" android:background="@drawable/button_bg" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginLeft="10.0dp" android:layout_marginTop="10.0dp" android:layout_marginBottom="10.0dp" android:text="取消" />
+    </LinearLayout>
+</LinearLayout>

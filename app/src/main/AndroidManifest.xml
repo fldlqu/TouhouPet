@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="k.p.main">
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
+    <application android:hardwareAccelerated="true" android:icon="@drawable/satori_blink" android:label="TouhouPet" android:persistent="true">
+        <activity android:label="TouhouPet" android:name=".TouhouPet">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity>
+        <service android:name=".MainService"/>
+        <receiver android:exported="false" android:name=".NotificationReceiver">
+            <intent-filter android:priority="1000">
+                <action android:name="thp"/>
+            </intent-filter>
+        </receiver>
+    </application>
+</manifest>

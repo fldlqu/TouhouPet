@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout android:orientation="vertical" android:background="@drawable/text_bg" android:layout_width="match_parent" android:layout_height="wrap_content"
+  xmlns:android="http://schemas.android.com/apk/res/android">
+    <TextView android:textSize="16.0dp" android:textColor="@android:color/black" android:layout_gravity="center" android:id="@id/songbar_songname" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="8.0dp" android:layout_marginBottom="4.0dp" android:text="成就名" />
+    <TextView android:textSize="14.0dp" android:textColor="@android:color/darker_gray" android:id="@id/songbar_artist" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginLeft="8.0dp" android:layout_marginBottom="8.0dp" android:text="描述描述描述描述描述描述描述描述描述描述描述描述描述描述描述描述描述" />
+</LinearLayout>

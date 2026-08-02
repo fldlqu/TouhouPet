@@ -1,0 +1,40 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'k.p.main'
+    compileSdk 35
+    buildToolsVersion "36.0.0"
+
+    defaultConfig {
+        applicationId "k.p.main"
+        // Faithful to the original APK (apktool.yml: minSdk 8, targetSdk 15, versionCode 3)
+        minSdk 8
+        targetSdk 15
+        versionCode 3
+        versionName "1.0.2"
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+        }
+    }
+
+    buildFeatures {
+        buildConfig true   // 原版 APK 含 BuildConfig 类,保持一致
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    // Original APK shipped a single armeabi lib (libencrypt.so)
+    sourceSets {
+        main {
+            jniLibs.srcDirs = ['src/main/jniLibs']
+        }
+    }
+}

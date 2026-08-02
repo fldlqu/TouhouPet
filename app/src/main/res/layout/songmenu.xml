@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout android:orientation="vertical" android:id="@id/settings_listview" android:background="#ddffffff" android:focusable="false" android:layout_width="match_parent" android:layout_height="wrap_content"
+  xmlns:android="http://schemas.android.com/apk/res/android">
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="4.0dp">
+        <TextView android:textSize="12.0dp" android:textColor="@android:color/black" android:id="@id/songmenu_currenttime" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginLeft="4.0dp" android:layout_weight="1.0" />
+        <TextView android:textSize="16.0dp" android:textColor="@android:color/black" android:gravity="center" android:id="@id/songmenu_songname" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_weight="1.0" />
+        <TextView android:textSize="12.0dp" android:textColor="@android:color/black" android:gravity="right" android:id="@id/songmenu_totaltime" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginRight="4.0dp" android:layout_weight="1.0" />
+    </LinearLayout>
+    <SeekBar android:id="@id/songmenu_progress" android:layout_width="match_parent" android:layout_height="wrap_content" />
+    <LinearLayout android:gravity="center" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8.0dp" android:layout_marginBottom="8.0dp">
+        <LinearLayout android:gravity="left" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_weight="1.0">
+            <ImageView android:id="@id/songmenu_playmode" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginLeft="4.0dp" android:src="@drawable/song_allloop" />
+        </LinearLayout>
+        <LinearLayout android:gravity="center" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_weight="2.0">
+            <ImageView android:id="@id/songmenu_previous" android:layout_width="wrap_content" android:layout_height="wrap_content" android:src="@drawable/song_previous" />
+            <ImageView android:id="@id/songmenu_play" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginLeft="25.0dp" android:layout_marginRight="25.0dp" android:src="@drawable/song_play" />
+            <ImageView android:id="@id/songmenu_next" android:layout_width="wrap_content" android:layout_height="wrap_content" android:src="@drawable/song_next" />
+        </LinearLayout>
+        <LinearLayout android:gravity="right" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_weight="1.0">
+            <ImageView android:id="@id/songmenu_songlist" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginRight="4.0dp" android:src="@drawable/song_list" />
+        </LinearLayout>
+    </LinearLayout>
+</LinearLayout>

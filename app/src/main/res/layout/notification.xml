@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout android:gravity="center_vertical" android:orientation="horizontal" android:layout_width="match_parent" android:layout_height="match_parent"
+  xmlns:android="http://schemas.android.com/apk/res/android">
+    <ImageView android:id="@id/imageView1" android:layout_width="40.0dp" android:layout_height="40.0dp" android:src="@drawable/satori_blink" android:layout_weight="16.0" />
+    <LinearLayout android:gravity="center" android:orientation="vertical" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_weight="40.0">
+        <TextView android:textSize="20.0dp" android:textColor="@android:color/white" android:gravity="center" android:id="@id/notification_tv_state" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="状态:睡觉中..." />
+        <TextView android:textSize="16.0dp" android:textColor="@android:color/darker_gray" android:gravity="center" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="点击以显示/隐藏" />
+    </LinearLayout>
+    <LinearLayout android:orientation="vertical" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_weight="25.0">
+        <TextView android:textSize="12.0dp" android:id="@id/notification_tv_rd" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="饱食:" />
+        <TextView android:textSize="12.0dp" android:id="@id/notification_tv_dd" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="饮水:" />
+        <TextView android:textSize="12.0dp" android:id="@id/notification_tv_en" android:layout_width="wrap_content" android:layout_height="wrap_content" android:text="精力:" />
+    </LinearLayout>
+</LinearLayout>

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout android:gravity="center_horizontal" android:orientation="vertical" android:background="#cee2ff" android:layout_width="wrap_content" android:layout_height="wrap_content"
+  xmlns:android="http://schemas.android.com/apk/res/android">
+    <TextView android:textSize="20.0dp" android:textColor="@android:color/black" android:gravity="center" android:id="@id/confirm_title" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_weight="10.0" />
+    <View android:background="@android:color/white" android:layout_width="wrap_content" android:layout_height="1.0dp" />
+    <TextView android:textSize="16.0dp" android:textColor="@android:color/black" android:gravity="center" android:id="@id/confirm_message" android:layout_width="wrap_content" android:layout_height="wrap_content" android:minHeight="80.0dp" android:layout_weight="40.0" />
+    <View android:background="@android:color/white" android:layout_width="wrap_content" android:layout_height="1.0dp" />
+    <LinearLayout android:gravity="center_vertical" android:orientation="horizontal" android:layout_width="wrap_content" android:layout_height="wrap_content">
+        <TextView android:textSize="16.0sp" android:textColor="@android:color/black" android:gravity="center" android:id="@id/confirm_sure_button" android:background="@drawable/button_bg" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginTop="10.0dp" android:layout_marginRight="10.0dp" android:layout_marginBottom="10.0dp" />
+        <TextView android:textSize="16.0sp" android:textColor="@android:color/black" android:gravity="center" android:id="@id/confirm_cancel_button" android:background="@drawable/button_bg" android:layout_width="wrap_content" android:layout_height="wrap_content" android:layout_marginLeft="10.0dp" android:layout_marginTop="10.0dp" android:layout_marginBottom="10.0dp" />
+    </LinearLayout>
+</LinearLayout>
