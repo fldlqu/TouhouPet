@@ -374,7 +374,7 @@ open class SliderView : BaseDesktopView {
         if (context != null) {
             mainService = context as MainService
         }
-        setCurrentFPS(30.0f)
+        setCurrentFPS(MAX_FPS)
         setViewHeight((1280.0f * Y_SCALE).toInt())
         setViewWidth((160.0f * X_SCALE).toInt())
         setViewCurrentX(-viewWidth.toFloat())
@@ -535,9 +535,7 @@ open class SliderView : BaseDesktopView {
             if (rate in 1f..240f) rate else 40.0f
         }
         BaseView.MAX_FPS = fps
-        ViewService.petView?.setCurrentFPS(fps)
-        ViewService.statusView?.setCurrentFPS(fps)
-        ViewService.sliderView?.setCurrentFPS(fps)
-        ViewService.sliderHandlerView?.setCurrentFPS(fps)
+        /* 所有活动 view(含 MainView 等非 ViewService 实例)统一到新帧率 */
+        BaseView.applyMaxFpsToActive()
     }
 }

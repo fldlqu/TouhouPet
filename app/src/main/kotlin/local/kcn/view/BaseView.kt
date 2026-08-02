@@ -34,7 +34,7 @@ import java.util.ArrayList
  *   surfaceCreated/surfaceDestroyed, 不可见即暂停可见即恢复
  *
  * 保持不变的业务语义:
- * - MAX_FPS 40 上限 + updateInterval 节拍(Handler 帧调度)
+ * - MAX_FPS 档位(跟随系统/40/60, 设定可调变) + updateInterval 节拍(Handler 帧调度)
  * - paused / requestPause / requestStop / startDraw 全部保留
  * - updateStatus(time) 返回 true 才真正 invalidate 重绘(与旧版"返回值决定 lockCanvas"一致)
  * - loadBitmap/releaseBitmap 资源链与 bitmapList 回收完全保留
@@ -63,6 +63,18 @@ open class BaseView : View {
 
         @JvmField
         val TAG = "BaseView"
+
+        /* 活跃实例注册表: 档位变更时统一刷新所有 view(含 MainView 等不属
+         * ViewService 的实例)。attach 时注册, detach 时移除, 防泄漏。 */
+        private val activeViews = java.util.concurrent.CopyOnWriteArrayList<BaseView>()
+
+        /** 档位变更后把所有活跃 view 的目标帧率统一为 MAX_FPS */
+        @JvmStatic
+        fun applyMaxFpsToActive() {
+            for (view in activeViews) {
+                view.setCurrentFPS(MAX_FPS)
+            }
+        }
     }
 
     @JvmField
@@ -140,6 +152,9 @@ open class BaseView : View {
          * (官方 PorterDuff 能力表), 无需软件离屏层。 */
         init0()
         setWillNotDraw(false)
+        /* 构造即注册(非 attach): 启动时档位应用在 show() 之前就需生效;
+         * detach 时注销防泄漏。 */
+        activeViews.add(this)
         asyncScope.launch {
             asyncInit()
             asyncInitCompleted()
@@ -204,6 +219,7 @@ open class BaseView : View {
 
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
+        activeViews.add(this)
         attached = true
         if (!stopped) {
             if (paused) {
@@ -216,6 +232,7 @@ open class BaseView : View {
     }
 
     override fun onDetachedFromWindow() {
+        activeViews.remove(this)
         attached = false
         stopFrameLoop()
         if (!paused && !stopped) {

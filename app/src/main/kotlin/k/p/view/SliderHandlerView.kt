@@ -20,7 +20,7 @@ open class SliderHandlerView : BaseDesktopView {
 
     override fun init() {
         super.init()
-        setCurrentFPS(30.0f)
+        setCurrentFPS(MAX_FPS)
         setViewHeight((200.0f * Y_SCALE).toInt())
         setViewWidth((100.0f * X_SCALE).toInt())
         setViewCurrentX(0.0f)

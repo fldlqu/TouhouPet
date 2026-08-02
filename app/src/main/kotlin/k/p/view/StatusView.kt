@@ -33,7 +33,7 @@ open class StatusView : BaseDesktopView {
         super.init()
         setViewWidth((X_SCALE * 300.0f).toInt())
         setViewHeight((Y_SCALE * 500.0f).toInt())
-        setCurrentFPS(20.0f)
+        setCurrentFPS(MAX_FPS)
         setViewCurrentX(X_SCALE * 180.0f)
         params!!.x = (X_SCALE * 180.0f).toInt()
         bgBitmap = loadBitmap(R.drawable.statusview_bg)

@@ -58,7 +58,7 @@ open class PetView : BaseDesktopView {
         setViewCurrentY((SCREEN_HEIGHT / 2).toFloat())
         params!!.x = SCREEN_WIDTH / 2
         params!!.y = SCREEN_HEIGHT / 2
-        setCurrentFPS(40.0f)
+        setCurrentFPS(MAX_FPS)
         rect = Rect(0, 0, viewWidth, viewHeight)
     }
 
