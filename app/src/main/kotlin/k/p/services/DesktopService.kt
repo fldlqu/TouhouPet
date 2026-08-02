@@ -2,9 +2,7 @@ package k.p.services
 
 import android.content.Context
 import android.view.View
-import android.view.ViewGroup
 import android.view.WindowManager
-import android.widget.FrameLayout
 import k.p.view.BaseDesktopView
 import k.p.modern.Diag
 import local.kcn.utils.LogUtil
@@ -36,7 +34,7 @@ class DesktopService private constructor() {
             }
             if (!svc.viewList.contains(view)) {
                 try {
-                    svc.windowManager!!.addView(wrapIfNeeded(view), params)
+                    svc.windowManager!!.addView(view, params)
                     Diag.log("addView OK: " + view.javaClass.simpleName + " w=" + params.width + " h=" + params.height + " x=" + params.x + " y=" + params.y)
                 } catch (e: Exception) {
                     Diag.log("addView THROW: " + view.javaClass.simpleName + " -> " + e)
@@ -49,26 +47,8 @@ class DesktopService private constructor() {
             }
         }
 
-        /* 平台兜底: SurfaceView 直接作为 overlay 窗口根时, 个别系统在 attach 阶段
-         * 出现 mParent==null 的 NPE (SurfaceView.onAttachedToWindow); 包一层
-         * FrameLayout 让 SurfaceView 的 parent 恒非空。容器与 view 同尺寸同位置,
-         * 触摸/显示无感。 */
-        private fun wrapIfNeeded(view: BaseDesktopView): View {
-            val p = view.parent
-            if (p != null) {
-                return if (p is View) p else view
-            }
-            return FrameLayout(view.context).apply {
-                addView(
-                    view,
-                    ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-                )
-            }
-        }
-
         private fun hostOf(view: BaseDesktopView): View {
-            val p = view.parent
-            return if (p is View) p else view
+            return view
         }
 
         @JvmStatic

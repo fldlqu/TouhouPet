@@ -2,6 +2,7 @@ package k.p.view
 
 import android.content.Context
 import android.graphics.Paint
+import android.graphics.PixelFormat
 import android.graphics.PorterDuff
 import android.graphics.PorterDuffXfermode
 import android.view.MotionEvent
@@ -13,7 +14,7 @@ import kotlinx.coroutines.launch
 import k.p.modern.AppScopes
 import k.p.services.DesktopService
 import local.kcn.utils.MathUtil
-import local.kcn.view.BaseSurfaceView
+import local.kcn.view.BaseView
 
 /**
  * 架构现代化:Kotlin 重写。
@@ -22,7 +23,7 @@ import local.kcn.view.BaseSurfaceView
  * - Handler.sendEmptyMessage(WM 刷新排队) → 主线程协程 launch
  * 行为语义与原版一致;@JvmField/open 保持 Java 子类兼容。
  */
-open class BaseDesktopView : BaseSurfaceView {
+open class BaseDesktopView : BaseView {
 
     companion object {
         private const val CLICK_DISTANCE_RANGE = 30.0f
@@ -183,6 +184,9 @@ open class BaseDesktopView : BaseSurfaceView {
     override fun init() {
         params = WindowManager.LayoutParams().apply {
             type = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            /* 悬浮窗必须透明, 否则窗口背景为不透明(UberFloatingWidget 黑底)。
+             * SurfaceView 时代由 holder.setFormat(-3) 保证; 普通 View 由 format 声明。 */
+            format = PixelFormat.TRANSLUCENT
             flags = 776
             gravity = 51
             x = 0

@@ -12,10 +12,10 @@ import android.util.AttributeSet
 import android.view.MotionEvent
 import k.p.utils.EnvironmentUtil
 import local.kcn.utils.LogUtil
-import local.kcn.view.BaseSurfaceView
+import local.kcn.view.BaseView
 import java.io.File
 
-open class MainView : BaseSurfaceView {
+open class MainView : BaseView {
     private var bgAlpha = 0f
     private var bgBitmap: Bitmap? = null
     private var blinkAlpha = 0f
