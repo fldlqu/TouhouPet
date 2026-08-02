@@ -51,6 +51,8 @@ object SongService {
     private var audioFocusRequest: AudioFocusRequest? = null
     private var ducking = false
     private var resumeAfterFocusLoss = false
+    /* 当前 MediaPlayer 是否已完成 prepare(首次点击播放需先备好, 否则 start 无输出) */
+    private var playerPrepared = false
     private val focusHandler = Handler(Looper.getMainLooper())
     private var nextButton: ImageView? = null
     private var playButton: ImageView? = null
@@ -259,6 +261,7 @@ object SongService {
             }
         }
         mediaPlayer!!.setOnPreparedListener {
+            playerPrepared = true
             mediaPlayer!!.start()
             requestFocusIfNeeded()
             syncSession()
@@ -435,6 +438,14 @@ object SongService {
 
     private fun resumePlayback() {
         resumeAfterFocusLoss = false
+        /* 首次点击播放: loadSong 只 setDataSource 未 prepare, 直接 start 没声; 补一次同步 prepare */
+        if (!playerPrepared) {
+            try {
+                mediaPlayer!!.prepare()
+                playerPrepared = true
+            } catch (e: Exception) {
+            }
+        }
         mediaPlayer!!.start()
         requestFocusIfNeeded()
         playing = true
