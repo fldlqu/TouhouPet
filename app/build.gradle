@@ -4,14 +4,14 @@ plugins {
 
 android {
     namespace 'k.p.main'
-    compileSdk 35
+    compileSdk 36
     buildToolsVersion "36.0.0"
 
     defaultConfig {
         applicationId "k.p.main"
-        // 现代化:minSdk 26(Android 8.0,TYPE_APPLICATION_OVERLAY 统一)、targetSdk 35
+        // 现代化:minSdk 26(Android 8.0)、targetSdk 36(Android 16)
         minSdk 26
-        targetSdk 35
+        targetSdk 36
         versionCode 4
         versionName "1.1.0"
     }

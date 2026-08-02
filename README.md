@@ -46,14 +46,16 @@ arm64 设备优先加载 arm64-v8a；32 位设备仍用原版 so，行为 100% �
 
 ## 构建
 
-已在本机（Termux aarch64 + Android SDK 35 + build-tools 36）**实际构建验证通过**：
+已在本机（Termux aarch64 + Android SDK 36 + build-tools 36）**实际构建验证通过**：
 
 ```bash
 ./gradlew assembleDebug   # → app/build/outputs/apk/debug/app-debug.apk
+./gradlew assembleRelease # → app/build/outputs/apk/release/app-release.apk(debug key 签名)
+./tools/align16k.sh       # → *-16k.apk:Android 16 (16KB 页)兼容的 16KB 对齐版
 ```
 
 工具链：Gradle 9.6.1 / AGP 9.3.1 / JDK 26 / compileSdk 35，
-**main 分支:`minSdk 26 / targetSdk 35 / versionCode 4 / versionName 1.1.0`**；
+**main 分支:`minSdk 26 / targetSdk 36 / versionCode 4 / versionName 1.1.0`**；
 `original` 分支保留原版 `minSdk 8 / targetSdk 15 / versionCode 3 / versionName 1.0.2`。
 
 本机特殊配置（已放 `~/.gradle/gradle.properties`，不影响项目可移植性）：
@@ -95,7 +97,8 @@ arm64 设备优先加载 arm64-v8a；32 位设备仍用原版 so，行为 100% �
 | 旧数据迁移 | 首次启动检测旧版 SD 卡目录并整体拷贝到新目录(存档/动画/音乐全部保留) |
 | 前台服务 | `startForeground` 带 `specialUse` 类型 + 声明(Android 14+ 必须);通知改用 Channel + Builder;PendingIntent 加 `FLAG_IMMUTABLE`(targetSdk 31+ 必须) |
 | 权限声明 | 移除 `WRITE_EXTERNAL_STORAGE`;新增 `POST_NOTIFICATIONS`(Android 13+ 运行时请求,不阻塞);移除无效的 `persistent="true"` |
-| SDK 级别 | `minSdk 8→26`(Android 8.0,统一悬浮窗 API 无兼容分支)、`targetSdk 15→35` |
+| SDK 级别 | `minSdk 8→26`(Android 8.0)、`targetSdk 15→36`(Android 16) |
+| 16KB 页 | `extractNativeLibs=false` 时 so 从 zip 直接映射;`tools/align16k.sh` 产出 16KB 对齐 APK(16KB 页设备必需) |
 | 图标 | 自适应图标(adaptive icon,深蓝灰底 + 原版宠物图) |
 | Application | 新增 `PetApplication` 统一初始化(数据目录、通知渠道) |
 | 版本号 | versionCode 3→4, versionName 1.0.2→1.1.0 |
