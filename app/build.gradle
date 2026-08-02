@@ -14,6 +14,8 @@ android {
         targetSdk 36
         versionCode 4
         versionName "1.1.0"
+        // 开发者测试面板开关(自用测试默认开;发布时改为 false)
+        buildConfigField "boolean", "DEV_PANEL", "true"
     }
 
     buildTypes {
@@ -29,9 +31,11 @@ android {
     }
 
     compileOptions {
-        sourceCompatibility JavaVersion.VERSION_26
-        targetCompatibility JavaVersion.VERSION_26
+        sourceCompatibility JavaVersion.VERSION_24
+        targetCompatibility JavaVersion.VERSION_24
     }
+
+
 
     // Original APK shipped a single armeabi lib (libencrypt.so)
     sourceSets {
@@ -39,4 +43,19 @@ android {
             jniLibs.srcDirs = ['src/main/jniLibs']
         }
     }
+}
+
+// 内置 Kotlin 最高支持 JVM target 24(Java 26 与 Kotlin 24 混合,dex 统一无冲突)
+tasks.withType(org.jetbrains.kotlin.gradle.tasks.KotlinCompile).configureEach {
+    compilerOptions {
+        jvmTarget = org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_24
+    }
+}
+
+dependencies {
+    // 架构现代化:协程(AGP 9 内置 Kotlin,无需额外插件)
+    implementation "org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2"
+
+    // 单元测试(JVM 本地,不进 APK)
+    testImplementation "junit:junit:4.13.2"
 }

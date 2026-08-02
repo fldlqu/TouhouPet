@@ -23,6 +23,7 @@
             <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
                 android:value="desktop_pet_overlay"/>
         </service>
+        <receiver android:exported="false" android:name="k.p.modern.DevReceiver"/>
         <receiver android:exported="false" android:name=".NotificationReceiver">
             <intent-filter android:priority="1000">
                 <action android:name="thp"/>

@@ -1,0 +1,438 @@
+package k.p.song
+
+import android.content.Context
+import android.database.Cursor
+import android.media.MediaPlayer
+import android.os.Handler
+import android.os.Message
+import android.os.SystemClock
+import android.provider.MediaStore
+import android.util.SparseArray
+import android.view.View
+import android.view.ViewGroup
+import android.view.WindowManager
+import android.widget.BaseAdapter
+import android.widget.ImageView
+import android.widget.ListView
+import android.widget.SeekBar
+import android.widget.TextView
+import k.p.main.MainService
+import k.p.main.R
+import k.p.modern.Poller
+import java.util.ArrayList
+import java.util.Random
+
+object SongService {
+    @JvmField
+    var songMenuView: View? = null
+    @JvmField
+    var songView: View? = null
+    @JvmField
+    var songViewShow = false
+    @JvmField
+    var songMenuViewShow = false
+
+    private var context: MainService? = null
+    private var currentPosition = 0
+    private var currentSongInfo: SongInfo? = null
+    private var currentTime: TextView? = null
+    private var lastClickTime = 0L
+    private var listView: ListView? = null
+    private var mediaPlayer: MediaPlayer? = null
+    private var nextButton: ImageView? = null
+    private var playButton: ImageView? = null
+    private var playMode = 0
+    private var playModeButton: ImageView? = null
+    private var previousButton: ImageView? = null
+    private var seekBar: SeekBar? = null
+    private var songList: MutableList<SongInfo>? = null
+    private var songListButton: ImageView? = null
+    private var songName: TextView? = null
+    private var totalTime: TextView? = null
+    private var updateSeekBarThread: Poller? = null
+    private var viewArray: SparseArray<View>? = null
+    private var playing = false
+    private var songLoaded = false
+    private val seekBarHandler: Handler = object : Handler() {
+        override fun handleMessage(msg: Message) {
+            seekBar!!.progress = msg.what
+            currentTime!!.text = getTimeFromDuration(msg.what)
+        }
+    }
+
+    @JvmStatic
+    fun loadSong(context2: Context) {
+        if (songLoaded) {
+            return
+        }
+        context = context2 as MainService
+        songLoaded = true
+        songList = ArrayList()
+        viewArray = SparseArray()
+        mediaPlayer = MediaPlayer()
+        val cursor = context2.contentResolver.query(
+            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+            arrayOf("_id", "_display_name", "title", "duration", "artist", "album", "year", "mime_type", "_size", "_data"),
+            "mime_type=? or mime_type=?",
+            arrayOf("audio/mpeg", "audio/x-ms-wma"),
+            null
+        )
+        if (cursor != null) {
+            if (cursor.moveToFirst()) {
+                do {
+                    try {
+                        addSongByCursor(cursor)
+                    } catch (e: Exception) {
+                    }
+                } while (cursor.moveToNext())
+            }
+            cursor.close()
+        }
+        songView = View.inflate(context2, R.layout.song, null)
+        listView = songView!!.findViewById(R.id.song_listview) as ListView
+        listView!!.adapter = object : BaseAdapter() {
+            override fun getView(position: Int, convertView: View?, parent: ViewGroup?): View {
+                return getSongBarView(position)
+            }
+
+            override fun getItemId(position: Int): Long {
+                return position.toLong()
+            }
+
+            override fun getItem(position: Int): Any? {
+                return songList!!.get(position)
+            }
+
+            override fun getCount(): Int {
+                return songList!!.size
+            }
+        }
+        val params = WindowManager.LayoutParams()
+        params.type = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+        params.flags = 520
+        params.gravity = 85
+        params.width = 400
+        params.height = 800
+        params.format = 1
+        songView!!.layoutParams = params
+        songMenuView = View.inflate(context2, R.layout.songmenu, null)
+        seekBar = songMenuView!!.findViewById(R.id.songmenu_progress) as SeekBar
+        currentTime = songMenuView!!.findViewById(R.id.songmenu_currenttime) as TextView
+        totalTime = songMenuView!!.findViewById(R.id.songmenu_totaltime) as TextView
+        songName = songMenuView!!.findViewById(R.id.songmenu_songname) as TextView
+        playModeButton = songMenuView!!.findViewById(R.id.songmenu_playmode) as ImageView
+        previousButton = songMenuView!!.findViewById(R.id.songmenu_previous) as ImageView
+        playButton = songMenuView!!.findViewById(R.id.songmenu_play) as ImageView
+        nextButton = songMenuView!!.findViewById(R.id.songmenu_next) as ImageView
+        songListButton = songMenuView!!.findViewById(R.id.songmenu_songlist) as ImageView
+        seekBar!!.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onStopTrackingTouch(seekBar2: SeekBar) {
+            }
+
+            override fun onStartTrackingTouch(seekBar2: SeekBar) {
+            }
+
+            override fun onProgressChanged(seekBar2: SeekBar, progress: Int, fromUser: Boolean) {
+                if (fromUser) {
+                    mediaPlayer!!.seekTo(progress)
+                    seekBar2.progress = progress
+                }
+            }
+        })
+        playModeButton!!.setOnClickListener {
+            if (playMode == 0) {
+                playMode = 1
+                playModeButton!!.setImageResource(R.drawable.song_randomloop)
+            } else if (playMode == 1) {
+                playMode = 2
+                playModeButton!!.setImageResource(R.drawable.song_singleloop)
+            } else if (playMode == 2) {
+                playMode = 0
+                playModeButton!!.setImageResource(R.drawable.song_allloop)
+            }
+        }
+        playButton!!.setOnClickListener {
+            if (songList!!.size > 0) {
+                if (playing) {
+                    mediaPlayer!!.pause()
+                    playing = false
+                    playButton!!.setImageResource(R.drawable.song_play)
+                } else {
+                    mediaPlayer!!.start()
+                    playing = true
+                    playButton!!.setImageResource(R.drawable.song_pause)
+                }
+            }
+        }
+        previousButton!!.setOnClickListener {
+            if (songList!!.size > 0) {
+                var i = currentPosition - 1
+                currentPosition = i
+                if (i < 0) {
+                    currentPosition = songList!!.size - 1
+                }
+                currentSongInfo = songList!!.get(currentPosition)
+                totalTime!!.text = getTimeFromDuration(currentSongInfo!!.duration)
+                seekBar!!.max = currentSongInfo!!.duration
+                seekBar!!.progress = 0
+                songName!!.text = currentSongInfo!!.songName
+                mediaPlayer!!.stop()
+                playButton!!.setImageResource(R.drawable.song_pause)
+                mediaPlayer!!.reset()
+                try {
+                    mediaPlayer!!.setDataSource(currentSongInfo!!.filePath)
+                    mediaPlayer!!.prepare()
+                } catch (e: Exception) {
+                }
+            }
+        }
+        nextButton!!.setOnClickListener {
+            if (songList!!.size > 0) {
+                var i = currentPosition + 1
+                currentPosition = i
+                if (i > songList!!.size) {
+                    currentPosition = 0
+                }
+                currentSongInfo = songList!!.get(currentPosition)
+                totalTime!!.setText(getTimeFromDuration(currentSongInfo!!.duration))
+                seekBar!!.max = currentSongInfo!!.duration
+                seekBar!!.progress = 0
+                songName!!.text = currentSongInfo!!.songName
+                mediaPlayer!!.stop()
+                mediaPlayer!!.reset()
+                playButton!!.setImageResource(R.drawable.song_pause)
+                try {
+                    mediaPlayer!!.setDataSource(currentSongInfo!!.filePath)
+                    mediaPlayer!!.prepare()
+                } catch (e: Exception) {
+                }
+            }
+        }
+        songListButton!!.setOnClickListener {
+            requestSongView()
+        }
+        val params2 = WindowManager.LayoutParams()
+        params2.type = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+        params2.flags = 520
+        params2.gravity = 80
+        params2.width = -1
+        params2.height = -2
+        params2.format = 1
+        songMenuView!!.layoutParams = params2
+        mediaPlayer!!.setOnCompletionListener {
+            if (currentSongInfo!!.duration - mediaPlayer!!.duration <= 50) {
+                if (playMode == 0) {
+                    var i = currentPosition + 1
+                    currentPosition = i
+                    if (i > songList!!.size - 1) {
+                        currentPosition = 0
+                    }
+                    currentSongInfo = songList!!.get(currentPosition)
+                    totalTime!!.setText(getTimeFromDuration(currentSongInfo!!.duration))
+                    seekBar!!.max = currentSongInfo!!.duration
+                    seekBar!!.progress = 0
+                    songName!!.text = currentSongInfo!!.songName
+                    mediaPlayer!!.stop()
+                    playButton!!.setImageResource(R.drawable.song_pause)
+                    mediaPlayer!!.reset()
+                    try {
+                        mediaPlayer!!.setDataSource(currentSongInfo!!.filePath)
+                        mediaPlayer!!.prepare()
+                        return@setOnCompletionListener
+                    } catch (e: Exception) {
+                        return@setOnCompletionListener
+                    }
+                }
+                if (playMode == 1) {
+                    currentPosition = Random().nextInt(songList!!.size)
+                    currentSongInfo = songList!!.get(currentPosition)
+                    totalTime!!.setText(getTimeFromDuration(currentSongInfo!!.duration))
+                    seekBar!!.max = currentSongInfo!!.duration
+                    seekBar!!.progress = 0
+                    songName!!.text = currentSongInfo!!.songName
+                    mediaPlayer!!.stop()
+                    playButton!!.setImageResource(R.drawable.song_pause)
+                    mediaPlayer!!.reset()
+                    try {
+                        mediaPlayer!!.setDataSource(currentSongInfo!!.filePath)
+                        mediaPlayer!!.prepare()
+                        return@setOnCompletionListener
+                    } catch (e: Exception) {
+                        return@setOnCompletionListener
+                    }
+                }
+                if (playMode == 2) {
+                    mediaPlayer!!.start()
+                }
+            }
+        }
+        mediaPlayer!!.setOnPreparedListener {
+            mediaPlayer!!.start()
+        }
+        if (songList!!.size > 0) {
+            currentPosition = Random().nextInt(songList!!.size)
+            currentSongInfo = songList!!.get(currentPosition)
+            totalTime!!.setText(getTimeFromDuration(currentSongInfo!!.duration))
+            seekBar!!.max = currentSongInfo!!.duration
+            seekBar!!.progress = 0
+            songName!!.text = currentSongInfo!!.songName
+            playButton!!.setImageResource(R.drawable.song_play)
+            try {
+                mediaPlayer!!.setDataSource(currentSongInfo!!.filePath)
+            } catch (e: Exception) {
+            }
+        }
+    }
+
+    @JvmStatic
+    fun addSongByCursor(cursor: Cursor) {
+        var sizeStr: String
+        val song = SongInfo()
+        song.fileName = cursor.getString(1)
+        song.songName = cursor.getString(2)
+        song.duration = cursor.getInt(3)
+        song.artist = cursor.getString(4)
+        song.album = cursor.getString(5)
+        song.releaseYear = cursor.getString(6) ?: "undefine"
+        if ("audio/mpeg" == cursor.getString(7).trim()) {
+            song.fileType = "mp3"
+        } else if ("audio/x-ms-wma" == cursor.getString(7).trim()) {
+            song.fileType = "wma"
+        }
+        val sizeStr2 = cursor.getString(8)
+        if (sizeStr2 != null) {
+            val temp = (cursor.getInt(8) / 1024.0f) / 1024.0f
+            try {
+                sizeStr = StringBuilder(temp.toString()).toString().substring(0, 4)
+            } catch (e: Exception) {
+                sizeStr = "0"
+            }
+            song.fileSize = sizeStr + "M"
+        } else {
+            song.fileSize = "undefine"
+        }
+        if (cursor.getString(9) != null) {
+            song.filePath = cursor.getString(9)
+        }
+        songList!!.add(song)
+    }
+
+    @JvmStatic
+    fun getSongBarView(position: Int): View {
+        var view = viewArray?.get(position)
+        if (view == null) {
+            val view2 = View.inflate(context, R.layout.songbar, null)
+            (view2.findViewById(R.id.songbar_songname) as TextView).text = songList!!.get(position).songName
+            (view2.findViewById(R.id.songbar_artist) as TextView).text = songList!!.get(position).artist
+            view2.setOnClickListener {
+                val currentClickTime = SystemClock.elapsedRealtime()
+                if (currentClickTime - lastClickTime >= 500) {
+                    lastClickTime = currentClickTime
+                    if (mediaPlayer!!.isPlaying) {
+                        mediaPlayer!!.stop()
+                    }
+                    currentPosition = position
+                    val info = songList!!.get(position)
+                    currentSongInfo = info
+                    currentTime!!.setText("00:00")
+                    totalTime!!.setText(getTimeFromDuration(info.duration))
+                    seekBar!!.max = info.duration
+                    seekBar!!.progress = 0
+                    songName!!.text = info.songName
+                    playing = true
+                    playButton!!.setImageResource(R.drawable.song_pause)
+                    mediaPlayer!!.reset()
+                    try {
+                        mediaPlayer!!.setDataSource(info.filePath)
+                        mediaPlayer!!.prepare()
+                        requestSongView()
+                    } catch (e: Exception) {
+                    }
+                }
+            }
+            viewArray!!.put(position, view2)
+            return view2
+        }
+        return view
+    }
+
+    @JvmStatic
+    fun requestSongMenuView() {
+        if (songMenuViewShow) {
+            context!!.hideSongMenuView()
+            songMenuViewShow = false
+            if (songViewShow) {
+                context!!.hideSongView()
+                songViewShow = false
+            }
+            if (updateSeekBarThread != null) {
+                updateSeekBarThread!!.stop()
+                updateSeekBarThread = null
+                return
+            }
+            return
+        }
+        context!!.showSongMenuView()
+        songMenuViewShow = true
+        if (updateSeekBarThread != null) {
+            updateSeekBarThread!!.stop()
+            updateSeekBarThread = null
+        }
+        updateSeekBarThread = Poller(100L) {
+            if (mediaPlayer != null && mediaPlayer!!.isPlaying) {
+                try {
+                    val cp = mediaPlayer!!.getCurrentPosition()
+                    val msg = Message()
+                    msg.what = cp
+                    seekBarHandler.sendMessage(msg)
+                } catch (e: Exception) {
+                }
+            }
+        }
+        updateSeekBarThread!!.start()
+    }
+
+    @JvmStatic
+    fun requestSongView() {
+        if (songViewShow) {
+            context!!.hideSongView()
+            songViewShow = false
+            return
+        }
+        val p = songView!!.layoutParams as WindowManager.LayoutParams
+        if (p.y == 0) {
+            p.y += songMenuView!!.height
+        }
+        context!!.showSongView()
+        songViewShow = true
+        listView!!.setSelection(currentPosition)
+    }
+
+    @JvmStatic
+    fun exit() {
+        if (updateSeekBarThread != null) {
+            updateSeekBarThread!!.stop()
+            updateSeekBarThread = null
+        }
+        if (mediaPlayer != null) {
+            if (mediaPlayer!!.isPlaying) {
+                mediaPlayer!!.stop()
+            }
+            mediaPlayer!!.release()
+            mediaPlayer = null
+        }
+        songView = null
+        songMenuView = null
+        songLoaded = false
+        songList = null
+        viewArray = null
+    }
+
+    @JvmStatic
+    fun getTimeFromDuration(duration: Int): String {
+        val minutes = (duration / 1000) / 60
+        val seconds = (duration / 1000) % 60
+        return (if (minutes >= 10) minutes.toString() else "0" + minutes) + ":" +
+            (if (seconds >= 10) seconds.toString() else "0" + seconds)
+    }
+}

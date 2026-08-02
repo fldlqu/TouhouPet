@@ -1,6 +1,5 @@
 package k.p.domain;
 
-import android.util.Log;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -440,7 +439,6 @@ public abstract class BasePet implements Serializable {
     }
 
     protected void finalize() throws Throwable {
-        Log.e("LOG", "pet finalized");
         super.finalize();
     }
 
