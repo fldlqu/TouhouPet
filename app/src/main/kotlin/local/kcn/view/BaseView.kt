@@ -40,6 +40,10 @@ import java.util.ArrayList
  * - loadBitmap/releaseBitmap 资源链与 bitmapList 回收完全保留
  * - protected 字段/方法签名不变, Kotlin 子类无需改动
  *
+ * 渲染后端: 默认硬件加速(不设 SOFT 层)。子类 update 里 clearPaint(CLEAR)
+ * 的 PorterDuff 模式在 hardware canvas 受支持(官方能力表仅 ADD/LIGHTEN/OVERLAY
+ * 等 framebuffer 混合受 API 限制), 故不需要软件离屏层。
+ *
  * 状态机(与旧 BaseSurfaceView 等价):
  * - startDraw() 仅是"请求开始"标志(addView 场景下由 DesktopService 调用)
  * - onAttachedToWindow 时若请求过且未暂停 → 启动帧循环
@@ -129,10 +133,9 @@ open class BaseView : View {
         frames = 0
         offset = 0L
         res = context.resources
-        /* 渲染语义同旧 SurfaceView(软件画布): 透明背景 + 每帧位移完整重绘。
-         * 硬件加速 Canvas 不支持 PorterDuff.CLEAR(子类 update 里 clearPaint),
-         * 也用层保证透明度/混合与旧版一致。 */
-        setLayerType(LAYER_TYPE_SOFTWARE, null)
+        /* 硬件加速(默认): 悬浮窗 View 走 GPU 合成。
+         * 子类 update 里的 clearPaint(CLEAR) 在 hardware canvas 上受支持
+         * (官方 PorterDuff 能力表), 无需软件离屏层。 */
         init0()
         setWillNotDraw(false)
         asyncScope.launch {
