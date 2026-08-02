@@ -476,7 +476,9 @@ object SongService {
         if (songList!!.size > 0) {
             var i = currentPosition + 1
             currentPosition = i
-            if (i > songList!!.size) {
+            /* 原版 bug: i > size 应为 >=; 最后一首点下一首会越界 get(size) 崩溃,
+             * 正确行为是回到第一首(与自动播放 completion 的 i > size-1 语义一致) */
+            if (i > songList!!.size - 1) {
                 currentPosition = 0
             }
             currentSongInfo = songList!!.get(currentPosition)
