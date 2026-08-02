@@ -146,7 +146,7 @@ public class BaseDesktopView extends BaseSurfaceView {
     @SuppressLint({"HandlerLeak"})
     protected void init() {
         this.params = new WindowManager.LayoutParams();
-        this.params.type = 2003;
+        this.params.type = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
         this.params.flags = 776;
         this.params.gravity = 51;
         this.params.x = 0;

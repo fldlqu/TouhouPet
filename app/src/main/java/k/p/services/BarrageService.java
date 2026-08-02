@@ -50,7 +50,7 @@ public class BarrageService {
         playerName = (TextView) barrageView.findViewById(R.id.barrage_playername);
         playerHP = (TextView) barrageView.findViewById(R.id.barrage_playerhp);
         WindowManager.LayoutParams params = new WindowManager.LayoutParams();
-        params.type = 2003;
+        params.type = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
         params.flags = 520;
         params.gravity = 17;
         params.width = 600;

@@ -9,11 +9,11 @@ android {
 
     defaultConfig {
         applicationId "k.p.main"
-        // Faithful to the original APK (apktool.yml: minSdk 8, targetSdk 15, versionCode 3)
-        minSdk 8
-        targetSdk 15
-        versionCode 3
-        versionName "1.0.2"
+        // 现代化:minSdk 26(Android 8.0,TYPE_APPLICATION_OVERLAY 统一)、targetSdk 35
+        minSdk 26
+        targetSdk 35
+        versionCode 4
+        versionName "1.1.0"
     }
 
     buildTypes {

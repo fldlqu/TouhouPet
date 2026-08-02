@@ -1,8 +1,13 @@
-# TouhouPet (逆向重建项目)
+# TouhouPet (逆向重建 + 现代化)
 
 从 APK 逆向重建的 Android 项目。原应用 **TouhouPet v1.0.2**（package `k.p.main`）是一个
 桌面宠物类应用（2012–2013 年开发，东方 Project 主题，宠物为古明地觉 Satori），
 使用 `SYSTEM_ALERT_WINDOW` 悬浮窗常驻桌面，数据存放在 SD 卡 `TouhouPet` 文件夹。
+
+**分支说明**:
+- `original` —— 行为保真基线:与 2012 年原版逐方法一致(255/255 方法级比对通过),仅保证能构建;
+  在现代 Android 上无法运行(Android 8+ 禁止 TYPE_PHONE 悬浮窗)。
+- `main` —— 现代化版(本分支):在保真基线上做现代系统适配,宠物逻辑/存档格式不变。
 
 ## 项目结构
 
@@ -48,7 +53,8 @@ arm64 设备优先加载 arm64-v8a；32 位设备仍用原版 so，行为 100% �
 ```
 
 工具链：Gradle 9.6.1 / AGP 9.3.1 / JDK 26 / compileSdk 35，
-`minSdk 8 / targetSdk 15 / versionCode 3 / versionName 1.0.2`（与原 APK 的 apktool.yml 一致）。
+**main 分支:`minSdk 26 / targetSdk 35 / versionCode 4 / versionName 1.1.0`**；
+`original` 分支保留原版 `minSdk 8 / targetSdk 15 / versionCode 3 / versionName 1.0.2`。
 
 本机特殊配置（已放 `~/.gradle/gradle.properties`，不影响项目可移植性）：
 - `android.aapt2FromMavenOverride`：AGP 自带的 aapt2 只有 x86-64 版，ARM 设备需指向 SDK build-tools 的原生版。
@@ -78,6 +84,26 @@ arm64 设备优先加载 arm64-v8a；32 位设备仍用原版 so，行为 100% �
 | 各覆写方法上的 `throws Throwable` | dex 元数据与 javac 覆写规则冲突 | 移除（仅编译期元数据，dalvik 忽略） |
 | `android/annotation/SuppressLint`、`TargetApi` | 原项目自带的 SDK 桩类 | 删除（现代 android.jar 自带，保留会与 SDK 类冲突） |
 | `R.java`、`BuildConfig.java` | jadx 从 dex 恢复的生成类 | 删除（构建时由 aapt2 / AGP 重新生成） |
+
+## 现代化改动（main 分支，相对 original 基线）
+
+| 改动 | 说明 |
+|---|---|
+| 悬浮窗类型 | 全部 8 处 `TYPE_PHONE`(2003)→ `TYPE_APPLICATION_OVERLAY`(Android 8+ 唯一可用) |
+| 悬浮窗权限引导 | 启动时检查 `Settings.canDrawOverlays()`,缺失则弹窗跳系统设置,返回后自动继续 |
+| 数据目录 | `/sdcard/TouhouPet` → `getExternalFilesDir(null)/TouhouPet`(应用专属,免存储权限,卸载即清) |
+| 旧数据迁移 | 首次启动检测旧版 SD 卡目录并整体拷贝到新目录(存档/动画/音乐全部保留) |
+| 前台服务 | `startForeground` 带 `specialUse` 类型 + 声明(Android 14+ 必须);通知改用 Channel + Builder;PendingIntent 加 `FLAG_IMMUTABLE`(targetSdk 31+ 必须) |
+| 权限声明 | 移除 `WRITE_EXTERNAL_STORAGE`;新增 `POST_NOTIFICATIONS`(Android 13+ 运行时请求,不阻塞);移除无效的 `persistent="true"` |
+| SDK 级别 | `minSdk 8→26`(Android 8.0,统一悬浮窗 API 无兼容分支)、`targetSdk 15→35` |
+| 图标 | 自适应图标(adaptive icon,深蓝灰底 + 原版宠物图) |
+| Application | 新增 `PetApplication` 统一初始化(数据目录、通知渠道) |
+| 版本号 | versionCode 3→4, versionName 1.0.2→1.1.0 |
+
+**未改动**(行为保真):宠物逻辑/状态机/存档格式与加解密(SUID 兼容旧存档)、UI 布局与图片、动画加载。
+
+**首次启动流程**:授权悬浮窗 → (有旧数据则自动迁移)→ 无数据目录则提示放置数据
+(动画/音乐数据原版就不在 APK 内,需用户提供 `pet/`、`system/` 等目录)。
 
 ## 已知限制 / 待验证
 

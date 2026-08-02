@@ -1,15 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android" package="k.p.main">
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"/>
+    <!-- 现代化:存档迁至应用专属目录(getExternalFilesDir),不再需要 WRITE_EXTERNAL_STORAGE -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW"/>
-    <application android:hardwareAccelerated="true" android:icon="@drawable/satori_blink" android:label="TouhouPet" android:persistent="true">
-        <activity android:label="TouhouPet" android:name=".TouhouPet">
+    <!-- 前台服务(桌面宠物常驻) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE"/>
+    <!-- Android 13+ 通知权限(前台服务通知) -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <application android:hardwareAccelerated="true" android:icon="@mipmap/ic_launcher"
+        android:label="TouhouPet" android:name=".PetApplication">
+        <activity android:exported="true" android:label="TouhouPet" android:name=".TouhouPet">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
-        <service android:name=".MainService"/>
+        <!-- Android 14+ 要求前台服务声明类型:specialUse(桌面宠物悬浮窗) -->
+        <service android:exported="false" android:foregroundServiceType="specialUse" android:name=".MainService">
+            <property android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="desktop_pet_overlay"/>
+        </service>
         <receiver android:exported="false" android:name=".NotificationReceiver">
             <intent-filter android:priority="1000">
                 <action android:name="thp"/>

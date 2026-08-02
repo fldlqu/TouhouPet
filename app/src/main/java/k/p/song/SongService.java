@@ -100,7 +100,7 @@ public class SongService {
                 }
             });
             WindowManager.LayoutParams params = new WindowManager.LayoutParams();
-            params.type = 2003;
+            params.type = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
             params.flags = 520;
             params.gravity = 85;
             params.width = 400;
@@ -222,7 +222,7 @@ public class SongService {
                 }
             });
             WindowManager.LayoutParams params2 = new WindowManager.LayoutParams();
-            params2.type = 2003;
+            params2.type = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
             params2.flags = 520;
             params2.gravity = 80;
             params2.width = -1;

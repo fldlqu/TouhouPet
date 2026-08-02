@@ -34,7 +34,7 @@ public class DialogService {
     public static void confirm(String title, String message, String sureStr, String cancelStr, final CallBack callback) {
         clearDialog();
         WindowManager.LayoutParams params = new WindowManager.LayoutParams();
-        params.type = 2003;
+        params.type = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
         params.flags = 520;
         params.gravity = 17;
         params.width = -2;
@@ -105,7 +105,7 @@ public class DialogService {
     public static void alert(String title, String message, String sureStr, final CallBack callback, boolean autoHide) {
         clearDialog();
         WindowManager.LayoutParams params = new WindowManager.LayoutParams();
-        params.type = 2003;
+        params.type = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
         params.flags = 520;
         params.gravity = 17;
         params.width = -2;
@@ -146,7 +146,7 @@ public class DialogService {
     public static void changeNameDialog() {
         clearDialog();
         WindowManager.LayoutParams params = new WindowManager.LayoutParams();
-        params.type = 2003;
+        params.type = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY;
         params.flags = 512;
         params.gravity = 17;
         params.width = -2;

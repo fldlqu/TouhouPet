@@ -77,7 +77,7 @@ public class MainService extends Service {
                         builder.setMessage("游戏异常中止,即将尝试保存退出\r\n\r\nCause By : \r\n" + e.getLocalizedMessage());
                         builder.setPositiveButton("确定", (DialogInterface.OnClickListener) null);
                         AlertDialog dialog = builder.create();
-                        dialog.getWindow().setType(2003);
+                        dialog.getWindow().setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY);
                         dialog.setCanceledOnTouchOutside(false);
                         dialog.show();
                         return;
@@ -181,13 +181,20 @@ public class MainService extends Service {
                 ViewService.statusView = new StatusView(this);
                 ViewService.petView.show();
                 notificationManager = (NotificationManager) getSystemService("notification");
-                notification = new Notification(R.drawable.satori_blink, "TouhouPet", System.currentTimeMillis());
-                notification.flags = 2;
                 Intent intent = new Intent();
                 intent.setAction("thp");
-                notification.contentView = new RemoteViews(getPackageName(), R.layout.notification);
-                notification.contentIntent = PendingIntent.getBroadcast(this, 0, intent, 134217728);
-                startForeground(NOTIFICATION_ID, notification);
+                /* 现代化:Notification.Builder + 渠道(API 26+ 必须);FLAG_IMMUTABLE(targetSdk 31+ 必须);
+                 * startForeground 带 specialUse 类型(Android 14+ 必须)。 */
+                notification = new Notification.Builder(this, PetApplication.CHANNEL_ID)
+                        .setSmallIcon(R.drawable.satori_blink)
+                        .setContentTitle("TouhouPet")
+                        .setOngoing(true)
+                        .setContent(new RemoteViews(getPackageName(), R.layout.notification))
+                        .setContentIntent(PendingIntent.getBroadcast(this, 0, intent,
+                                134217728 | 33554432))
+                        .build();
+                startForeground(NOTIFICATION_ID, notification,
+                        android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
                 this.currentTime = SystemClock.elapsedRealtime();
                 this.lastTime = this.currentTime;
                 this.saveTime = SAVE_INTERVAL;
