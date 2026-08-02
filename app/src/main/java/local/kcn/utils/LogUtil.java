@@ -51,7 +51,7 @@ public class LogUtil {
         log(tag, "----------------Exception----------------");
         log(tag, Log.getStackTraceString(e));
         log(tag, "-----------------------------------------");
-        if (record) {
+        if (record && recordPath != null) {
             FileWriter fw2 = null;
             File file = null;
             File file2 = new File(recordPath);

@@ -40,6 +40,7 @@ public class TouhouPet extends Activity {
                         REQUEST_NOTIFICATION);
             }
             if (!Settings.canDrawOverlays(this)) {
+                overlayDialogShown = true; /* 避免 onCreate 后紧随的 onResume 重复弹窗 */
                 showOverlayPermissionDialog();
                 return;
             }

@@ -81,6 +81,11 @@ public class PetView extends BaseDesktopView {
         super.updateStatus(time);
         this.lastClickTime -= time;
         this.totalTime += time;
+        if (this.currentAnimationInfo == null) {
+            /* 动画数据缺失(数据目录无 pet/animations)时保持空白,不崩溃;
+             * 原版用户数据齐全不会走到这里 */
+            return false;
+        }
         if (this.totalTime > this.currentAnimationInfo.getDelay()) {
             this.currentAnimationInfo = this.currentAnimation.nextFrame();
             if (this.currentAnimationInfo == null) {
