@@ -7,20 +7,15 @@ import android.graphics.BitmapFactory
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Rect
+import android.os.Handler
+import android.os.Looper
 import android.os.SystemClock
 import android.util.AttributeSet
 import android.util.TypedValue
-import android.view.SurfaceHolder
-import android.view.SurfaceView
+import android.view.View
 import android.view.WindowManager
-import kotlin.coroutines.coroutineContext
-import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.runBlocking
 import local.kcn.utils.LogUtil
 import k.p.modern.AppScopes
 import k.p.modern.Diag
@@ -29,18 +24,30 @@ import java.io.InputStream
 import java.util.ArrayList
 
 /**
- * 架构现代化:Kotlin 重写 + 协程绘制循环(替代 2012 年的裸 Thread)。
+ * 渲染基座: 普通 View(onDraw) 替代原 SurfaceView + lockCanvas 自绘体系。
  *
- * 行为语义与原版一致:
- * - surfaceCreated 时启动绘制循环(原版 drawThread.start())
- * - 40 FPS 上限、paused 语义、updateStatus 返回 false 时不重绘
- * - requestStop 用协程取消(比原版 join(1000) 更干净)
+ * 与旧 BaseSurfaceView 的差异(仅渲染驱动层):
+ * - SurfaceView(独立 Surface / 后台线程 lockCanvas) → View(onDraw 主线程绘制)
+ * - 表面尺寸: SurfaceView 由系统决定 → View 由 WindowManager 布局尺寸决定
+ *   (悬浮窗经 DesktopService 挂载, params.width/height 即绘制尺寸)
+ * - 表面生命周期: onAttachedToWindow/onDetachedFromWindow 替代
+ *   surfaceCreated/surfaceDestroyed, 不可见即暂停可见即恢复
  *
- * 全部 protected 成员用 @JvmField/open 保持与 Java 子类(PetView/MainView/…)
- * 的二进制兼容:字段直接访问、方法覆写签名不变。
+ * 保持不变的业务语义:
+ * - MAX_FPS 40 上限 + updateInterval 节拍(Handler 帧调度)
+ * - paused / requestPause / requestStop / startDraw 全部保留
+ * - updateStatus(time) 返回 true 才真正 invalidate 重绘(与旧版"返回值决定 lockCanvas"一致)
+ * - loadBitmap/releaseBitmap 资源链与 bitmapList 回收完全保留
+ * - protected 字段/方法签名不变, Kotlin 子类无需改动
+ *
+ * 状态机(与旧 BaseSurfaceView 等价):
+ * - startDraw() 仅是"请求开始"标志(addView 场景下由 DesktopService 调用)
+ * - onAttachedToWindow 时若请求过且未暂停 → 启动帧循环
+ * - onDetachedFromWindow → 停帧 + paused=true(对应 surfaceDestroyed -- requestPause)
+ * - requestPause 停帧; 下次 attach 恢复
+ * - requestStop 终止并释放资源
  */
-open class BaseSurfaceView : SurfaceView, SurfaceHolder.Callback {
-
+open class BaseView : View {
     companion object {
         @JvmField
         val MAX_FPS = 40.0f
@@ -49,7 +56,7 @@ open class BaseSurfaceView : SurfaceView, SurfaceHolder.Callback {
         val MIN_FPS = 0.01f
 
         @JvmField
-        val TAG = "BaseSurfaceView"
+        val TAG = "BaseView"
     }
 
     @JvmField
@@ -102,17 +109,16 @@ open class BaseSurfaceView : SurfaceView, SurfaceHolder.Callback {
     @JvmField
     protected var updateStatusWhenPaused = false
 
-    /** 绘制循环作用域(surfaceCreated 时启动一次);单线程保证 lock/unlock 同线程 */
-    private val drawScope = AppScopes.newSingle()
-
     /** 异步初始化作用域(构造时启动) */
-    private val asyncScope = AppScopes.newSingle()
+    private val asyncScope = AppScopes.newDefault()
 
-    private var drawStarted = false
-    private var firstFrameLogged = false
-
-    /** 绘制协程 Job(requestStop 时等待其退出后再回收资源) */
-    private var drawJob: Job? = null
+    /** 帧调度(主线程) */
+    private val frameHandler = Handler(Looper.getMainLooper())
+    private val frameRunnable = Runnable { onFrameTick() }
+    private var frameScheduled = false
+    private var attached = false
+    private var frameRequested = false
+    private var stopped = false
 
     constructor(context: Context) : this(context, null)
 
@@ -123,36 +129,42 @@ open class BaseSurfaceView : SurfaceView, SurfaceHolder.Callback {
         frames = 0
         offset = 0L
         res = context.resources
-        holder.setFormat(-3)
+        /* 渲染语义同旧 SurfaceView(软件画布): 透明背景 + 每帧位移完整重绘。
+         * 硬件加速 Canvas 不支持 PorterDuff.CLEAR(子类 update 里 clearPaint),
+         * 也用层保证透明度/混合与旧版一致。 */
+        setLayerType(LAYER_TYPE_SOFTWARE, null)
         init0()
+        setWillNotDraw(false)
         asyncScope.launch {
             asyncInit()
             asyncInitCompleted()
         }
     }
 
+    /** 请求开始绘制(原 startDraw + holder.addCallback)。attach 前调用只记标志。 */
     fun startDraw() {
-        holder.addCallback(this)
+        frameRequested = true
+        currentTime = SystemClock.elapsedRealtime()
+        startTime = currentTime
+        lastTime = currentTime
+        frameScheduled = false
+        if (attached && !paused) {
+            startFrameLoop()
+        }
     }
 
     fun requestStop() {
         Diag.log("requestStop " + this.javaClass.simpleName)
+        stopped = true
         loop = false
-        // 协程取消:绘制循环在 delay 挂起点退出(对应原版 join(1000))
-        drawScope.cancel()
+        stopFrameLoop()
         asyncScope.cancel()
-        // 等绘制协程真正结束再回收 bitmap,避免回收正在绘制的帧 → Canvas: recycled bitmap 崩溃
-        // (原版语义:join 后 finally 里 release0;绘制协程在 Default 线程,阻塞等待无死锁)
-        if (drawJob != null) {
-            runBlocking {
-                drawJob?.join()
-            }
-        }
         release0()
     }
 
     open fun requestPause() {
         paused = true
+        stopFrameLoop()
     }
 
     protected open fun init() {
@@ -185,14 +197,76 @@ open class BaseSurfaceView : SurfaceView, SurfaceHolder.Callback {
         init()
     }
 
-    private fun updateStatus0(): Boolean {
-        val time = (currentTime - lastTime).toInt()
-        frames++
-        offset = currentTime - startTime
-        return updateStatus(time)
+    override fun onAttachedToWindow() {
+        super.onAttachedToWindow()
+        attached = true
+        if (!stopped) {
+            if (paused) {
+                paused = false /* 原 surfaceCreated 语义: attach 恢复 */
+            }
+            if (frameRequested && !paused) {
+                startFrameLoop()
+            }
+        }
     }
 
-    private fun update0(canvas: Canvas) {
+    override fun onDetachedFromWindow() {
+        attached = false
+        stopFrameLoop()
+        if (!paused && !stopped) {
+            paused = true /* 原 surfaceDestroyed 语义: 不可见即暂停 */
+        }
+        super.onDetachedFromWindow()
+    }
+
+    private fun startFrameLoop() {
+        if (frameScheduled || !loop || !attached) {
+            return
+        }
+        frameScheduled = true
+        frameHandler.post(frameRunnable)
+    }
+
+    private fun stopFrameLoop() {
+        frameScheduled = false
+        frameHandler.removeCallbacks(frameRunnable)
+    }
+
+    /** 一帧节拍: 时间推进 + updateStatus + 可选 invalidate(对应旧 loop 前半段) */
+    private fun onFrameTick() {
+        frameScheduled = false
+        if (!loop || !attached || paused) {
+            return
+        }
+        val elapsed = SystemClock.elapsedRealtime()
+        /* 与旧 loop 一致: lastTime 为上一帧时刻, time 为帧间隔 */
+        val time = (elapsed - lastTime).toInt()
+        lastTime = elapsed
+        currentTime = elapsed
+        frames++
+        offset = elapsed - startTime
+        if (updateStatus(time)) {
+            invalidate()
+        }
+        /* 节拍控制: 到下一帧的最小等待时间 = 帧耗用后的剩余间隔 */
+        val minTime = (updateInterval - time).toInt()
+        if (frameScheduled || !loop || !attached || paused) {
+            return
+        }
+        frameScheduled = true
+        if (minTime > 0) {
+            frameHandler.postDelayed(frameRunnable, minTime.toLong())
+        } else {
+            frameHandler.post(frameRunnable)
+        }
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        /* release0()已回收位图; 若系统因布局/移动再次重绘, 直接跳过防 RecycledBitmap 崩溃 */
+        if (!loop) {
+            return
+        }
+        super.onDraw(canvas)
         update(canvas)
     }
 
@@ -204,79 +278,6 @@ open class BaseSurfaceView : SurfaceView, SurfaceHolder.Callback {
         }
         bitmapList.clear()
         release()
-    }
-
-    /** 绘制循环:与原版 loop() 语义等价。
-     *  关键修正:lockCanvas/unlockCanvasAndPost 必须同线程配对(ReentrantLock),
-     *  delay 是挂起点会换线程 → unlock 移到 delay 之前,lock→unlock 间无挂起点。
-     *  顺序:draw(lock→update→unlock)→ delay → 下一轮,首帧立即绘制,节拍同原版。 */
-    private suspend fun loop() {
-        currentTime = SystemClock.elapsedRealtime()
-        startTime = currentTime
-        while (coroutineContext.isActive && loop) {
-            var canvas: Canvas? = null
-            try {
-                if (!paused || updateStatusWhenPaused) {
-                    lastTime = currentTime
-                    currentTime = SystemClock.elapsedRealtime()
-                    if (updateStatus0()) {
-                        synchronized(holder) {
-                            canvas = holder.lockCanvas()
-                            if (canvas != null && !paused) {
-                                try {
-                                    update0(canvas)
-                                } catch (e: Exception) {
-                                    LogUtil.log(TAG, e)
-                                }
-                            }
-                        }
-                    }
-                }
-                if (canvas != null) {
-                    holder.unlockCanvasAndPost(canvas)
-                    if (!firstFrameLogged) {
-                        firstFrameLogged = true
-                        Diag.log(" + frame " + this.javaClass.simpleName + " " + canvas.width + "x" + canvas.height)
-                    }
-                }
-                val minTime = (updateInterval - (currentTime - lastTime)).toInt()
-                if (minTime > 0) {
-                    delay(minTime.toLong())
-                }
-            } catch (t: Throwable) {
-                if (canvas != null) {
-                    holder.unlockCanvasAndPost(canvas)
-                }
-                if (t is CancellationException) {
-                    throw t
-                }
-                throw t
-            }
-        }
-    }
-
-    override fun surfaceCreated(holder: SurfaceHolder) {
-        Diag.log("surfaceCreated " + this.javaClass.simpleName + " paused=" + paused + " drawStarted=" + drawStarted + " scopeActive=" + drawScope.isActive)
-        if (paused) {
-            paused = false
-        } else if (!drawStarted) {
-            drawStarted = true
-            drawJob = drawScope.launch {
-                Diag.log("draw loop start " + this.javaClass.simpleName)
-                loop()
-            }
-        } else {
-            Diag.log("surfaceCreated SKIP: drawStarted already true")
-        }
-    }
-
-    override fun surfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
-    }
-
-    override fun surfaceDestroyed(holder: SurfaceHolder) {
-        if (!paused) {
-            requestPause()
-        }
     }
 
     protected fun loadBitmap(data: ByteArray, offset: Int, length: Int): Bitmap? {
@@ -334,7 +335,7 @@ open class BaseSurfaceView : SurfaceView, SurfaceHolder.Callback {
     }
 
     protected fun loadBitmap(stream: InputStream): Bitmap? {
-        val bitmap: Bitmap? = BitmapFactory.decodeStream(stream)
+        val bitmap = BitmapFactory.decodeStream(stream)
         bitmapList.add(bitmap)
         return bitmap
     }
