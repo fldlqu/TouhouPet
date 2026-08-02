@@ -242,7 +242,7 @@ public class TouhouPet extends Activity {
 
     @Override // android.app.Activity
     public void onBackPressed() {
-        if (this.mainView != null && this.mainView.getStage() >= 6) {
+        if (this.mainView.getStage() >= 6) {
             exit();
         }
     }
