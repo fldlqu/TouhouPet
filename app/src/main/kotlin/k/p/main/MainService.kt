@@ -21,6 +21,7 @@ import k.p.listener.OnPetPropertyChangeListener
 import k.p.listener.PetPropertyChangeEvent
 import k.p.modern.DevReceiver
 import k.p.modern.Diag
+import k.p.modern.ShakeMove
 import k.p.services.AnimationService
 import k.p.services.BarrageService
 import k.p.services.DesktopService
@@ -129,6 +130,14 @@ open class MainService : Service() {
         /* 开机自启标记: 服务活着即写; exit 清除(用户主动退出不自动恢复, 被系统回收/重启则恢复) */
         getSharedPreferences("thp_prefs", MODE_PRIVATE)
             .edit().putBoolean("boot_restore", true).apply()
+        /* 摇晃移动: 按上次设定恢复传感器监听(开关在设定菜单切换) */
+        try {
+            val shakeEnabled = getSharedPreferences("thp_prefs", MODE_PRIVATE)
+                .getBoolean("shake_move", false)
+            ShakeMove.setEnabled(this, shakeEnabled)
+        } catch (e: Exception) {
+            LogUtil.log(e)
+        }
         try {
             initLog()
         } catch (e1: Exception) {
@@ -361,6 +370,7 @@ open class MainService : Service() {
 
     override fun onDestroy() {
         LogUtil.log("Service is destroy")
+        ShakeMove.release()
     }
 
     companion object {

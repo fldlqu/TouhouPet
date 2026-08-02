@@ -18,6 +18,11 @@ open class BaseSliderTextButton(sv: SliderView, private var hint: String) : Slid
 
     override fun getHeight(): Int = (height * sliderView.getYScale()).toInt()
 
+    /* 现代化:设定项开关等需要动态更新文字(原版无此方法,纯新增) */
+    fun setHint(hint: String) {
+        this.hint = hint
+    }
+
     override fun onDraw(sc: SliderCanvas) {
         if (sliderView.textButtonBGBitmap != null && !sliderView.textButtonBGBitmap!!.isRecycled) {
             sc.drawBitmap(this, sliderView.textButtonBGBitmap!!, null, Rect(10, 10, 150, 60), null)

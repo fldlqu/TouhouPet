@@ -15,6 +15,7 @@ import k.p.domain.states.DeadState
 import k.p.location.Location
 import k.p.main.MainService
 import k.p.main.R
+import k.p.modern.ShakeMove
 import k.p.services.DialogService
 import k.p.services.LocationService
 import k.p.services.StateService
@@ -64,6 +65,12 @@ open class SliderView : BaseDesktopView {
 
     fun refreshWork() {
         (workList as WorkSliderItemList).refreshWorkInfo()
+    }
+
+    /* 摇晃移动开关状态(thp_prefs 持久化, 默认关) */
+    private fun isShakeEnabled(): Boolean {
+        return context.getSharedPreferences("thp_prefs", Context.MODE_PRIVATE)
+            .getBoolean("shake_move", false)
     }
 
     fun addWork(info: WorkAction.BaseWorkInfo) {
@@ -128,8 +135,12 @@ open class SliderView : BaseDesktopView {
                 val y2 = ((y * this@SliderView.Y_SCALE).toInt() + position - this@SliderView.currentSliderItemList!!.currentPosition).toInt()
                 canvas!!.clipRect(0, 0, this@SliderView.viewWidth, this@SliderView.viewHeight)
                 if (y2 > -buf && y2 < this@SliderView.SCREEN_HEIGHT + buf) {
-                    if (str.length > 4) {
-                        tmpPaint.textSize = paint.textSize * 0.6f
+                    /* 长文本按实测宽度适配背景(Rect(10,10,150,60)可用宽 140*X_SCALE),
+                     * 不硬缩 60%: 原逻辑用未乘 X_SCALE 的字号打折, 高分屏长文本只有 19px */
+                    val maxWidth = 140.0f * this@SliderView.X_SCALE
+                    val measured = tmpPaint.measureText(str)
+                    if (measured > maxWidth) {
+                        tmpPaint.textSize = tmpPaint.textSize * (maxWidth / measured)
                     }
                     canvas!!.drawText(str, x.toFloat(), y2.toFloat(), tmpPaint)
                 }
@@ -242,6 +253,31 @@ open class SliderView : BaseDesktopView {
                 addSliderItemView(object : BaseSliderTextButton(this@SliderView, "修改名字") {
                     override fun onClick() {
                         DialogService.changeNameDialog()
+                    }
+                })
+                /* 摇晃移动开关(持久化 thp_prefs; 开启后摇晃手机宠物随机换位置) */
+                addSliderItemView(object : BaseSliderTextButton(this@SliderView, "") {
+                    private val shakeHint: String
+                        get() = if (isShakeEnabled()) "摇晃移动:开" else "摇晃移动:关"
+
+                    override fun init() {
+                        super.init()
+                        setHint(shakeHint)
+                    }
+
+                    override fun onClick() {
+                        val enabled = !isShakeEnabled()
+                        if (enabled && !ShakeMove.setEnabled(this@SliderView.context.applicationContext, true)) {
+                            this@SliderView.toast("设备不支持摇晃检测")
+                            return
+                        }
+                        this@SliderView.context.getSharedPreferences("thp_prefs", Context.MODE_PRIVATE)
+                            .edit().putBoolean("shake_move", enabled).apply()
+                        if (!enabled) {
+                            ShakeMove.setEnabled(this@SliderView.context.applicationContext, false)
+                        }
+                        setHint(shakeHint)
+                        this@SliderView.toast(if (enabled) "摇晃移动:开(摇晃手机宠物换位置)" else "摇晃移动:关")
                     }
                 })
                 addSliderItemView(ReturnButton(this@SliderView))
