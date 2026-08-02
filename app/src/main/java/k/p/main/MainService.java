@@ -191,7 +191,7 @@ public class MainService extends Service {
                         .setOngoing(true)
                         .setContent(new RemoteViews(getPackageName(), R.layout.notification))
                         .setContentIntent(PendingIntent.getBroadcast(this, 0, intent,
-                                134217728 | 33554432))
+                                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE))
                         .build();
                 startForeground(NOTIFICATION_ID, notification,
                         android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE);
