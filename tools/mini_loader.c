@@ -117,7 +117,6 @@ void *load_so(const char *path, const char *sym) {
         }
         if (dep_handles[ndeps]) ndeps++;
     }
-            (void *)symtab, (void *)strtab, (void *)rel, relsz);
     Elf32_Addr base_addr = (Elf32_Addr)base;
 
     #define APPLY(r, n) do { \

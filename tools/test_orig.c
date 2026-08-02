@@ -46,7 +46,7 @@ static void fakeRel(void **e, jobject s, const char *c) {
 
 static void fail(const char *m) { wr(m); sys_exit(1); }
 
-int run(void) {
+int main(int argc, char **argv) {
     struct sigaction sa;
     sa.sa_sigaction = segv;
     sa.sa_flags = SA_SIGINFO;
@@ -66,7 +66,8 @@ int run(void) {
     if (!env) fail("malloc failed\n");
     *env = (void *)table; /* JNIEnv 是指向函数表指针的指针 */
 
-    void *h = load_so("./libencrypt-orig.so", "Java_k_p_utils_SaveLoadUtil_encryptFile");
+    const char *soPath = (argc > 1) ? argv[1] : "./libencrypt-orig.so";
+    void *h = load_so(soPath, "Java_k_p_utils_SaveLoadUtil_encryptFile");
     if (!h) fail("load_so failed\n");
     void (*ef)(void *, void *, jobject) = (void (*)(void *, void *, jobject))h;
 
@@ -90,7 +91,3 @@ int run(void) {
     return ok ? 0 : 1;
 }
 
-void _start(void) {
-    int r = run();
-    sys_exit(r);
-}

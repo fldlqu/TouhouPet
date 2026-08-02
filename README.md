@@ -22,8 +22,8 @@ app/src/main/
 │   ├── layout/                # apktool 解码的布局（11 个）
 │   └── values/ids.xml         # 从 resources.arsc 恢复的 id 声明
 └── jniLibs/
-    ├── armeabi/libencrypt.so      # 原 JNI 库（2012 年原文件，md5 与原 APK 一致，未改动）
-    └── arm64-v8a/libencrypt.so    # 由反汇编还原的 C 源码编译（等价实现，见 tools/）
+    ├── arm64-v8a/libencrypt.so    # 反汇编还原的 C 源码编译（等价实现，见 tools/）
+    └── armeabi-v7a/libencrypt.so  # 同上（32 位；原版 armeabi 带 TEXTREL，targetSdk≥23 被 linker 拒绝，已替换）
 ```
 
 ## 64 位支持（arm64-v8a）
@@ -42,7 +42,8 @@ JNI 函数表索引硬编码 169/170，无需 NDK）。验证链：
 3. **原版 so 真机对照**（`tools/mini_loader.c` 自写 ELF loader 在 32 位兼容模式加载原版 so，
    绕过现代 linker 的 TEXTREL 拒绝，**原版输出与推导算法逐字节一致**）。
 
-arm64 设备优先加载 arm64-v8a；32 位设备仍用原版 so，行为 100% 保真。
+arm64 设备加载 arm64-v8a；32 位设备加载 armeabi-v7a（重新编译版，无 TEXTREL，
+算法与原版逐字节一致——黑盒测试 VERIFIED）。原版 armeabi 文件保留在 original 分支。
 
 ## 构建
 
@@ -116,8 +117,9 @@ arm64 设备优先加载 arm64-v8a；32 位设备仍用原版 so，行为 100% �
 - 原应用用 `WindowManager.LayoutParams.TYPE_PHONE`(2003) 悬浮窗 —— Android 8.0+ 已禁止，
   需改为 `TYPE_APPLICATION_OVERLAY` 才能在当代系统运行（移植工作，未包含）。
 - 应用数据（宠物存档/动画 XML）存于 SD 卡 `TouhouPet/` 目录，不在 APK 内，无法从本 APK 恢复。
-- `libencrypt.so` 原版仅含 armeabi（2012 年产物）；本项目额外提供反汇编还原的 `arm64-v8a` 版本（见上节），
-  纯 64 位设备（无 32 位兼容层）也能运行。
+- 原版 `libencrypt.so` 仅含 armeabi 且带 TEXTREL（2012 年产物，targetSdk<23 豁免）；
+  本项目以反汇编还原源码重新编译 `arm64-v8a` + `armeabi-v7a`（见上节），行为等价、无 TEXTREL，
+  16KB 页设备用 `tools/align16k.sh` 的对齐版。
 - 编译验证用的是 API 17 的 android.jar；若用更高 compileSdk 构建，`@SuppressLint` 等标注
   行为一致，但悬浮窗 API 需按上条调整。
 
