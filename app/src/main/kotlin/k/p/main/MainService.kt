@@ -193,6 +193,8 @@ open class MainService : Service() {
                 ViewService.petView = PetView(this)
                 Diag.log("petView created, animW=" + AnimationService.petWidth + " animH=" + AnimationService.petHeight)
                 ViewService.statusView = StatusView(this)
+                /* 应用存档帧率上限(跟随系统/40/60), 使 4 个 view 的起始码率与设置一致 */
+                ViewService.sliderView!!.applyFrameRateCeiling()
                 ViewService.petView!!.show()
                 Diag.log("petView.show() called")
                 notificationManager = getSystemService(NotificationManager::class.java)

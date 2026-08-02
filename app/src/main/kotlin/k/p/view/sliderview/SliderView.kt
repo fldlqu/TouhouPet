@@ -5,6 +5,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Rect
+import android.view.WindowManager
 import k.p.action.SleepAction
 import k.p.action.StudyAction
 import k.p.action.WakeUpAction
@@ -22,6 +23,7 @@ import k.p.services.StateService
 import k.p.services.ViewService
 import k.p.song.SongService
 import k.p.view.BaseDesktopView
+import local.kcn.view.BaseView
 import java.util.ArrayList
 import java.util.HashMap
 
@@ -280,7 +282,41 @@ open class SliderView : BaseDesktopView {
                         this@SliderView.toast(if (enabled) "摇晃移动:开(摇晃手机宠物换位置)" else "摇晃移动:关")
                     }
                 })
+                /* 帧率上限: 跟随系统(system-preferred) / 40 / 60 轮换。
+                 * system 取系统刷新率(defaultDisplay.refreshRate), 120Hz 屏可到 120fps。 */
+                addSliderItemView(object : BaseSliderTextButton(this@SliderView, "") {
+                    private val modeList = arrayOf("system", "40", "60")
+                    private val fpsHint: String
+                        get() {
+                            return when (getFpsPref()) {
+                                "40" -> "帧率:40"
+                                "60" -> "帧率:60"
+                                else -> "帧率:跟随系统"
+                            }
+                        }
+
+                    override fun init() {
+                        super.init()
+                        setHint(fpsHint)
+                    }
+
+                    override fun onClick() {
+                        val pref = getFpsPref()
+                        val curIdx = modeList.indexOf(pref).let { if (it < 0) 0 else it }
+                        val next = modeList[(curIdx + 1) % modeList.size]
+                        this@SliderView.context.getSharedPreferences("thp_prefs", Context.MODE_PRIVATE)
+                            .edit().putString("frame_rate_max", next).apply()
+                        applyFrameRateCeiling()
+                        setHint(fpsHint)
+                        this@SliderView.toast("帧率:" + (BaseView.MAX_FPS.toInt()) + "fps")
+                    }
+                })
                 addSliderItemView(ReturnButton(this@SliderView))
+            }
+
+            private fun getFpsPref(): String {
+                return this@SliderView.context.getSharedPreferences("thp_prefs", Context.MODE_PRIVATE)
+                    .getString("frame_rate_max", "system") ?: "system"
             }
         }
         itemList = ItemSliderItemList(this@SliderView, sc)
@@ -479,5 +515,29 @@ open class SliderView : BaseDesktopView {
 
     fun changeListByLocation(targetY: Location) {
         currentSliderItemList = locationMap[targetY]
+    }
+
+    /* 帧率档位的全局应用:
+     * - system: BaseView.MAX_FPS = 系统刷新率(60/90/120Hz), 所有 view 目标帧率同步为系统刷新率
+     * - 40/60: 所有 view 目标帧率固定为该值
+     * 设定切换与启动时(MainService 创建完 4 个 view)调用。 */
+    fun applyFrameRateCeiling() {
+        val pref = context.getSharedPreferences("thp_prefs", Context.MODE_PRIVATE)
+            .getString("frame_rate_max", "system") ?: "system"
+        val fps = if (pref == "40") {
+            40.0f
+        } else if (pref == "60") {
+            60.0f
+        } else {
+            /* system-preferred: 跟随系统刷新率; 异常值回退 40 */
+            val rate = (context.getSystemService(Context.WINDOW_SERVICE) as WindowManager)
+                .defaultDisplay.refreshRate
+            if (rate in 1f..240f) rate else 40.0f
+        }
+        BaseView.MAX_FPS = fps
+        ViewService.petView?.setCurrentFPS(fps)
+        ViewService.statusView?.setCurrentFPS(fps)
+        ViewService.sliderView?.setCurrentFPS(fps)
+        ViewService.sliderHandlerView?.setCurrentFPS(fps)
     }
 }

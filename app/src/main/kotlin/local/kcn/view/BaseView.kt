@@ -53,8 +53,10 @@ import java.util.ArrayList
  */
 open class BaseView : View {
     companion object {
+        /** 最大帧率上限(所有 view 的 setCurrentFPS clamp 到该值)。
+         * 可在设定中调整: system(系统刷新率, system-preferred) 或 30/40/60。 */
         @JvmField
-        val MAX_FPS = 40.0f
+        var MAX_FPS = 40.0f
 
         @JvmField
         val MIN_FPS = 0.01f
