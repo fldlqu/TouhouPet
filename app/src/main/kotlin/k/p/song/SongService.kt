@@ -1,11 +1,13 @@
 package k.p.song
 
+import android.app.AlertDialog
 import android.content.Context
 import android.database.Cursor
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.media.MediaMetadata
+import android.media.MediaMetadataRetriever
 import android.media.MediaPlayer
 import android.media.session.MediaSession
 import android.media.session.PlaybackState
@@ -26,6 +28,7 @@ import android.widget.TextView
 import k.p.main.MainService
 import k.p.main.R
 import k.p.modern.Poller
+import java.io.File
 import java.util.ArrayList
 import java.util.Random
 
@@ -106,24 +109,7 @@ object SongService {
                 override fun onSkipToPrevious() = playPrevious()
             })
         }
-        val cursor = context2.contentResolver.query(
-            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
-            arrayOf("_id", "_display_name", "title", "duration", "artist", "album", "year", "mime_type", "_size", "_data"),
-            "mime_type=? or mime_type=?",
-            arrayOf("audio/mpeg", "audio/x-ms-wma"),
-            null
-        )
-        if (cursor != null) {
-            if (cursor.moveToFirst()) {
-                do {
-                    try {
-                        addSongByCursor(cursor)
-                    } catch (e: Exception) {
-                    }
-                } while (cursor.moveToNext())
-            }
-            cursor.close()
-        }
+        fillSongList()
         songView = View.inflate(context2, R.layout.song, null)
         listView = songView!!.findViewById(R.id.song_listview) as ListView
         listView!!.adapter = object : BaseAdapter() {
@@ -205,6 +191,16 @@ object SongService {
         songListButton!!.setOnClickListener {
             requestSongView()
         }
+        val folderButton = songMenuView!!.findViewById<TextView>(R.id.songmenu_folder)
+        folderButton.setOnClickListener {
+            chooseMusicFolder(context2)
+        }
+        val songAllButton = songMenuView!!.findViewById<TextView>(R.id.songmenu_songall)
+        songAllButton.setOnClickListener {
+            context2.getSharedPreferences("thp_prefs", Context.MODE_PRIVATE)
+                .edit().remove("music_folder").apply()
+            rescanList()
+        }
         val params2 = WindowManager.LayoutParams()
         params2.type = WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
         params2.flags = 520
@@ -266,19 +262,183 @@ object SongService {
             requestFocusIfNeeded()
             syncSession()
         }
-        if (songList!!.size > 0) {
-            currentPosition = Random().nextInt(songList!!.size)
-            currentSongInfo = songList!!.get(currentPosition)
-            totalTime!!.setText(getTimeFromDuration(currentSongInfo!!.duration))
+        refreshListState()
+    }
+
+    /* 按来源填充列表: 已选音乐文件夹 → 递归扫描; 否则全库扫描 */
+    private fun fillSongList() {
+        val list = songList ?: return
+        val prefs = context!!.getSharedPreferences("thp_prefs", Context.MODE_PRIVATE)
+        val folderPath = prefs.getString("music_folder", null)
+        if (folderPath != null) {
+            val dir = File(folderPath)
+            if (dir.isDirectory) {
+                scanFolder(dir, list)
+                return
+            }
+            /* 文件夹失效(改名/移走): 回退全库并清除配置 */
+            prefs.edit().remove("music_folder").apply()
+        }
+        fillFromMediaStore(context!!)
+    }
+
+    private fun fillFromMediaStore(context2: Context) {
+        /* 原版只查 mp3/wma; 现代扩展常见格式, 用 in 条件一次查全 */
+        val mimes = arrayOf(
+            "audio/mpeg", "audio/x-ms-wma", "audio/ogg", "audio/flac", "audio/x-flac",
+            "audio/wav", "audio/x-wav", "audio/x-m4a", "audio/mp4", "audio/aac", "audio/opus"
+        )
+        val selection = StringBuilder("mime_type=?")
+        for (i in 1 until mimes.size) selection.append(" or mime_type=?")
+        val cursor = context2.contentResolver.query(
+            MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
+            arrayOf("_id", "_display_name", "title", "duration", "artist", "album", "year", "mime_type", "_size", "_data"),
+            selection.toString(),
+            mimes,
+            null
+        )
+        if (cursor != null) {
+            if (cursor.moveToFirst()) {
+                do {
+                    try {
+                        addSongByCursor(cursor)
+                    } catch (e: Exception) {
+                    }
+                } while (cursor.moveToNext())
+            }
+            cursor.close()
+        }
+    }
+
+    private fun scanFolder(dir: File, out: MutableList<SongInfo>) {
+        val audioExts = listOf("mp3", "wma", "ogg", "wav", "flac", "m4a", "aac", "opus")
+        val files = dir.listFiles() ?: return
+        for (f in files) {
+            if (f.isDirectory) {
+                if (!f.name.startsWith(".")) {
+                    scanFolder(f, out)
+                }
+            } else {
+                val ext = f.name.substringAfterLast('.', "").lowercase()
+                if (ext in audioExts) {
+                    out.add(makeSongFromFile(f))
+                }
+            }
+        }
+    }
+
+    private fun makeSongFromFile(f: File): SongInfo {
+        val song = SongInfo()
+        song.fileName = f.name
+        val dot = f.name.lastIndexOf('.')
+        song.songName = if (dot > 0) f.name.substring(0, dot) else f.name
+        song.filePath = f.absolutePath
+        song.fileType = f.name.substringAfterLast('.', "").lowercase()
+        try {
+            val mb = f.length() / 1024.0f / 1024.0f
+            song.fileSize = String.format(java.util.Locale.US, "%.1fM", mb)
+        } catch (e: Exception) {
+        }
+        /* 时长/歌手从文件元数据读(MediaStore 版本同样字段; 列表 totalTime 需要真实时长) */
+        try {
+            val retriever = MediaMetadataRetriever()
+            retriever.setDataSource(f.absolutePath)
+            song.duration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toIntOrNull() ?: 0
+            song.artist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)
+            retriever.release()
+        } catch (e: Exception) {
+        }
+        return song
+    }
+
+    /* 重新扫描并刷新列表与播放定位(切歌/切回全库后调用) */
+    private fun rescanList() {
+        val list = songList ?: return
+        list.clear()
+        fillSongList()
+        refreshListState()
+    }
+
+    /* 同步列表状态到播放器/进度 UI(loadSong 尾部与 rescan 共用) */
+    private fun refreshListState() {
+        val list = songList ?: return
+        if (list.size > 0) {
+            currentPosition = Random().nextInt(list.size)
+            currentSongInfo = list[currentPosition]
+            totalTime!!.text = getTimeFromDuration(currentSongInfo!!.duration)
             seekBar!!.max = currentSongInfo!!.duration
             seekBar!!.progress = 0
             songName!!.text = currentSongInfo!!.songName
             playButton!!.setImageResource(R.drawable.song_play)
             try {
+                if (mediaPlayer!!.isPlaying) {
+                    mediaPlayer!!.stop()
+                }
+            } catch (e: Exception) {
+            }
+            try {
+                mediaPlayer!!.reset()
                 mediaPlayer!!.setDataSource(currentSongInfo!!.filePath)
             } catch (e: Exception) {
             }
+            playerPrepared = false
+        } else {
+            currentSongInfo = null
+            songName!!.text = "没有找到歌曲"
+            totalTime!!.text = "00:00"
+            seekBar!!.max = 0
+            seekBar!!.progress = 0
+            playButton!!.setImageResource(R.drawable.song_play)
         }
+        (listView!!.adapter as? BaseAdapter)?.notifyDataSetChanged()
+        listView!!.setSelection(0)
+    }
+
+    /* 目录选择器(利用已有"所有文件访问"权限, 逐级浏览目录) */
+    @JvmStatic
+    fun chooseMusicFolder(context2: Context) {
+        val prefs = context2.getSharedPreferences("thp_prefs", Context.MODE_PRIVATE)
+        var dir = prefs.getString("music_folder", null)?.let { File(it) }?.takeIf { it.isDirectory }
+            ?: File("/storage/emulated/0")
+        if (!dir.isDirectory) {
+            dir = File("/")
+        }
+        fun show() {
+            val dirs = dir.listFiles { f -> f.isDirectory && !f.name.startsWith(".") }
+                ?.sortedBy { it.name } ?: emptyList()
+            val items = ArrayList<String>()
+            items.add("选择此文件夹")
+            if (dir.parentFile != null) {
+                items.add("返回上级")
+            }
+            for (d in dirs) items.add(d.name)
+            val title = dir.absolutePath
+            /* Service context 弹窗必须 overlay 类型(同 MainService 异常框做法),
+             * 否则 BadTokenException */
+            val dialog = AlertDialog.Builder(context2)
+                .setTitle(if (title.length > 48) "…" + title.substring(title.length - 48) else title)
+                .setItems(items.toTypedArray()) { _, which ->
+                    when {
+                        which == 0 -> {
+                            prefs.edit().putString("music_folder", dir.absolutePath).apply()
+                            rescanList()
+                        }
+                        which == 1 && dir.parentFile != null -> {
+                            dir = dir.parentFile!!
+                            show()
+                        }
+                        else -> {
+                            dir = dirs[which - 2]
+                            show()
+                        }
+                    }
+                }
+                .setNegativeButton("取消", null)
+                .create()
+            dialog.window?.setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)
+            dialog.show()
+        }
+        show()
     }
 
     @JvmStatic

@@ -1,7 +1,10 @@
 package k.p.services
 
 import android.content.Context
+import android.view.View
+import android.view.ViewGroup
 import android.view.WindowManager
+import android.widget.FrameLayout
 import k.p.view.BaseDesktopView
 import k.p.modern.Diag
 import local.kcn.utils.LogUtil
@@ -33,7 +36,7 @@ class DesktopService private constructor() {
             }
             if (!svc.viewList.contains(view)) {
                 try {
-                    svc.windowManager!!.addView(view, params)
+                    svc.windowManager!!.addView(wrapIfNeeded(view), params)
                     Diag.log("addView OK: " + view.javaClass.simpleName + " w=" + params.width + " h=" + params.height + " x=" + params.x + " y=" + params.y)
                 } catch (e: Exception) {
                     Diag.log("addView THROW: " + view.javaClass.simpleName + " -> " + e)
@@ -44,6 +47,28 @@ class DesktopService private constructor() {
             if (!svc.allViewList.contains(view)) {
                 svc.allViewList.add(view)
             }
+        }
+
+        /* 平台兜底: SurfaceView 直接作为 overlay 窗口根时, 个别系统在 attach 阶段
+         * 出现 mParent==null 的 NPE (SurfaceView.onAttachedToWindow); 包一层
+         * FrameLayout 让 SurfaceView 的 parent 恒非空。容器与 view 同尺寸同位置,
+         * 触摸/显示无感。 */
+        private fun wrapIfNeeded(view: BaseDesktopView): View {
+            val p = view.parent
+            if (p != null) {
+                return if (p is View) p else view
+            }
+            return FrameLayout(view.context).apply {
+                addView(
+                    view,
+                    ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                )
+            }
+        }
+
+        private fun hostOf(view: BaseDesktopView): View {
+            val p = view.parent
+            return if (p is View) p else view
         }
 
         @JvmStatic
@@ -61,7 +86,7 @@ class DesktopService private constructor() {
                     } else {
                         view.requestPause()
                     }
-                    svc.windowManager!!.removeView(view)
+                    svc.windowManager!!.removeView(hostOf(view))
                     svc.viewList.remove(view)
                 } catch (e: Exception) {
                     LogUtil.log(TAG, "removeDesktopView Fail")
@@ -78,7 +103,7 @@ class DesktopService private constructor() {
             for (view in svc.allViewList) {
                 try {
                     view.requestStop()
-                    svc.windowManager!!.removeView(view)
+                    svc.windowManager!!.removeView(hostOf(view))
                 } catch (e: Exception) {
                     LogUtil.log(TAG, "removeDesktopView Fail")
                     e.printStackTrace()
@@ -90,7 +115,7 @@ class DesktopService private constructor() {
         @JvmStatic
         fun refreshDesktopView(view: BaseDesktopView) {
             try {
-                instance!!.windowManager!!.updateViewLayout(view, view.getParams())
+                instance!!.windowManager!!.updateViewLayout(hostOf(view), view.getParams())
             } catch (e: Exception) {
             }
         }

@@ -34,4 +34,6 @@
     <id name="songmenu_play" />
     <id name="songmenu_next" />
     <id name="songmenu_songlist" />
+    <id name="songmenu_folder" />
+    <id name="songmenu_songall" />
 </resources>

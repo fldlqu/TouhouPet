@@ -136,6 +136,7 @@ open class BaseSurfaceView : SurfaceView, SurfaceHolder.Callback {
     }
 
     fun requestStop() {
+        Diag.log("requestStop " + this.javaClass.simpleName)
         loop = false
         // 协程取消:绘制循环在 delay 挂起点退出(对应原版 join(1000))
         drawScope.cancel()
@@ -255,7 +256,7 @@ open class BaseSurfaceView : SurfaceView, SurfaceHolder.Callback {
     }
 
     override fun surfaceCreated(holder: SurfaceHolder) {
-        Diag.log("surfaceCreated " + this.javaClass.simpleName + " paused=" + paused)
+        Diag.log("surfaceCreated " + this.javaClass.simpleName + " paused=" + paused + " drawStarted=" + drawStarted + " scopeActive=" + drawScope.isActive)
         if (paused) {
             paused = false
         } else if (!drawStarted) {
@@ -264,6 +265,8 @@ open class BaseSurfaceView : SurfaceView, SurfaceHolder.Callback {
                 Diag.log("draw loop start " + this.javaClass.simpleName)
                 loop()
             }
+        } else {
+            Diag.log("surfaceCreated SKIP: drawStarted already true")
         }
     }
 
