@@ -78,16 +78,8 @@ open class MainService : Service() {
                     this@MainService.windowManager!!.addView(SongService.songView, SongService.songView!!.layoutParams)
                     return
                 }
-                3 -> {
+                SHOW_SONGMENUVIEW -> {
                     this@MainService.windowManager!!.addView(SongService.songMenuView, SongService.songMenuView!!.layoutParams)
-                    return
-                }
-                SHOW_BARRAGEVIEW -> {
-                    this@MainService.windowManager!!.addView(BarrageService.barrageView, BarrageService.barrageView!!.layoutParams)
-                    return
-                }
-                UPDATE_BARRAGEVIEW -> {
-                    this@MainService.windowManager!!.updateViewLayout(BarrageService.barrageView, BarrageService.barrageView!!.layoutParams)
                     return
                 }
                 else -> {
@@ -250,11 +242,11 @@ open class MainService : Service() {
     }
 
     fun showSongView() {
-        handler.sendEmptyMessage(2)
+        handler.sendEmptyMessage(SHOW_SONGVIEW)
     }
 
     fun showSongMenuView() {
-        handler.sendEmptyMessage(3)
+        handler.sendEmptyMessage(SHOW_SONGMENUVIEW)
     }
 
     fun hideSongView() {
@@ -263,18 +255,6 @@ open class MainService : Service() {
 
     fun hideSongMenuView() {
         windowManager!!.removeView(SongService.songMenuView)
-    }
-
-    fun requestNewBarrageView() {
-        handler.sendEmptyMessage(SHOW_BARRAGEVIEW)
-    }
-
-    fun updateBarrageView() {
-        handler.sendEmptyMessage(UPDATE_BARRAGEVIEW)
-    }
-
-    fun removeBarrageView() {
-        windowManager!!.removeView(BarrageService.barrageView)
     }
 
     private var exited = false
@@ -366,12 +346,9 @@ open class MainService : Service() {
         const val GAME_SPEED = 1
         private const val INTERRUPT = 1
         private const val NOTIFICATION_ID = 16
-        private const val REQUEST_DIALOG = 0
         private const val SAVE_INTERVAL = 600000
-        private const val SHOW_BARRAGEVIEW = 4
         private const val SHOW_SONGMENUVIEW = 3
         private const val SHOW_SONGVIEW = 2
-        private const val UPDATE_BARRAGEVIEW = 5
 
         @JvmField
         var context: MainService? = null

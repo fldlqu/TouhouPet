@@ -4,11 +4,6 @@
     <id name="songbar_songname" />
     <id name="songbar_artist" />
     <id name="settings_listview" />
-    <id name="barrage_enemyname" />
-    <id name="barrage_enemyhp" />
-    <id name="barrage_battlestatus" />
-    <id name="barrage_playername" />
-    <id name="barrage_playerhp" />
     <id name="imageView1" />
     <id name="notification_tv_state" />
     <id name="notification_tv_rd" />
