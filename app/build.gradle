@@ -15,7 +15,7 @@ android {
         versionCode 4
         versionName "1.1.0"
         // 开发者测试面板开关(自用测试默认开;发布时改为 false)
-        buildConfigField "boolean", "DEV_PANEL", "true"
+        buildConfigField "boolean", "DEV_PANEL", "false"
     }
 
     buildTypes {
