@@ -1,10 +1,12 @@
 package k.p.view.sliderview
 
+import android.app.AlertDialog
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Paint
 import android.graphics.Rect
+import android.view.WindowManager
 import k.p.action.SleepAction
 import k.p.action.StudyAction
 import k.p.action.WakeUpAction
@@ -47,8 +49,6 @@ open class SliderView : BaseDesktopView {
     @JvmField
     var mainService: MainService? = null
     @JvmField
-    var settingsList: SliderItemList? = null
-    @JvmField
     var studyList: SliderItemList? = null
     @JvmField
     var textBGBitmap: Bitmap? = null
@@ -71,6 +71,56 @@ open class SliderView : BaseDesktopView {
     private fun isShakeEnabled(): Boolean {
         return context.getSharedPreferences("thp_prefs", Context.MODE_PRIVATE)
             .getBoolean("shake_move", false)
+    }
+
+    /* 设定菜单 native: 原生 AlertDialog + 系统列表项(跟随系统主题/字体缩放自适应) */
+    private fun showSettingsDialog() {
+        if (DialogService.currentDialog != null) {
+            return /* 已有对话框(改名/退出确认等), 不叠加 */
+        }
+        /* setItems 用系统列表项渲染: 高度自适应字体缩放与多行, 无固定高度截断问题 */
+        val items = arrayOf(
+            "修改名字",
+            if (isShakeEnabled()) "摇晃移动:开" else "摇晃移动:关",
+            "返回"
+        )
+        lateinit var dlg: AlertDialog
+        dlg = AlertDialog.Builder(context)
+            .setTitle("设定")
+            .setItems(items) { _, which ->
+                when (which) {
+                    0 -> {
+                        dlg.dismiss()
+                        DialogService.changeNameDialog()
+                    }
+                    1 -> {
+                        val enabled = !isShakeEnabled()
+                        if (enabled && !ShakeMove.setEnabled(context.applicationContext, true)) {
+                            toast("设备不支持摇晃检测")
+                            dlg.dismiss()
+                            return@setItems
+                        }
+                        context.getSharedPreferences("thp_prefs", Context.MODE_PRIVATE)
+                            .edit().putBoolean("shake_move", enabled).apply()
+                        if (!enabled) {
+                            ShakeMove.setEnabled(context.applicationContext, false)
+                        }
+                        toast(if (enabled) "摇晃移动:开" else "摇晃移动:关")
+                        /* 刷新开关状态显示: 重建关闭再开 */
+                        dlg.dismiss()
+                        showSettingsDialog()
+                    }
+                    else -> dlg.dismiss()
+                }
+            }
+            .create()
+        dlg.window!!.setType(WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY)
+        dlg.setCancelable(false)
+        dlg.setCanceledOnTouchOutside(false)
+        /* 与 DialogService 共用 currentDialog: PetView/onHide 可感知并清理 */
+        DialogService.currentDialog = dlg
+        dlg.setOnDismissListener { if (DialogService.currentDialog === dlg) DialogService.currentDialog = null }
+        dlg.show()
     }
 
     fun addWork(info: WorkAction.BaseWorkInfo) {
@@ -220,7 +270,7 @@ open class SliderView : BaseDesktopView {
                 })
                 addSliderItemView(object : BaseSliderButton(this@SliderView, "设定", R.drawable.button_settings) {
                     override fun onClick() {
-                        this@SliderView.currentSliderItemList = this@SliderView.settingsList
+                        showSettingsDialog()
                     }
                 })
                 addSliderItemView(object : BaseSliderButton(this@SliderView, "隐藏", R.drawable.button_minimize) {
@@ -247,42 +297,6 @@ open class SliderView : BaseDesktopView {
         studyList = StudySliderItemList(this@SliderView, sc)
         workList = WorkSliderItemList(this@SliderView, sc)
         barrageList = BarrageSliderItemList(this@SliderView, sc)
-        settingsList = object : SliderItemList(this@SliderView, sc) {
-            override fun init() {
-                super.init()
-                addSliderItemView(object : BaseSliderTextButton(this@SliderView, "修改名字") {
-                    override fun onClick() {
-                        DialogService.changeNameDialog()
-                    }
-                })
-                /* 摇晃移动开关(持久化 thp_prefs; 开启后摇晃手机宠物随机换位置) */
-                addSliderItemView(object : BaseSliderTextButton(this@SliderView, "") {
-                    private val shakeHint: String
-                        get() = if (isShakeEnabled()) "摇晃移动:开" else "摇晃移动:关"
-
-                    override fun init() {
-                        super.init()
-                        setHint(shakeHint)
-                    }
-
-                    override fun onClick() {
-                        val enabled = !isShakeEnabled()
-                        if (enabled && !ShakeMove.setEnabled(this@SliderView.context.applicationContext, true)) {
-                            this@SliderView.toast("设备不支持摇晃检测")
-                            return
-                        }
-                        this@SliderView.context.getSharedPreferences("thp_prefs", Context.MODE_PRIVATE)
-                            .edit().putBoolean("shake_move", enabled).apply()
-                        if (!enabled) {
-                            ShakeMove.setEnabled(this@SliderView.context.applicationContext, false)
-                        }
-                        setHint(shakeHint)
-                        this@SliderView.toast(if (enabled) "摇晃移动:开(摇晃手机宠物换位置)" else "摇晃移动:关")
-                    }
-                })
-                addSliderItemView(ReturnButton(this@SliderView))
-            }
-        }
         itemList = ItemSliderItemList(this@SliderView, sc)
         actionList = object : SliderItemList(this@SliderView, sc) {
             override fun init() {
